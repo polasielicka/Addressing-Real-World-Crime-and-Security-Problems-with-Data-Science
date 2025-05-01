@@ -1,52 +1,93 @@
-import pandas as pd
 import os
+import glob
+import pandas as pd
 import matplotlib.pyplot as plt
 
-data_path = "data_CBL"
-all_data = []
+street_files  = glob.glob(os.path.join("data_CBL", "*", "*-street.csv"))
+outcome_files = glob.glob(os.path.join("data_CBL", "*", "*-outcomes.csv"))
 
-for folder in os.listdir(data_path):
-    month_folder = os.path.join(data_path, folder)
+df_street  = pd.concat((pd.read_csv(f) for f in street_files),  ignore_index=True)
+df_outcome = pd.concat((pd.read_csv(f) for f in outcome_files), ignore_index=True)
 
-    if os.path.isdir(month_folder):
-        for file in os.listdir(month_folder):
-            if "street" in file and file.endswith(".csv"):
-                full_path = os.path.join(month_folder, file)
-                df = pd.read_csv(full_path)
-                df["Month"] = pd.to_datetime(df["Month"], format="%Y-%m")
-                all_data.append(df)
+df = pd.merge(df_street, df_outcome, on="Crime ID", how="inner")
 
-crime_df = pd.concat(all_data, ignore_index=True)
-burglary_df = crime_df[crime_df['Crime type'] == 'Burglary']
-monthly_counts = burglary_df.groupby(burglary_df["Month"].dt.to_period("M")).size()
+print("Available columns:", df.columns.tolist())
 
-monthly_counts.plot(kind='bar', figsize=(10, 6), title="Monthly Burglary Incidents")
+month_col = next((c for c in df.columns if "month" in c.lower()), None)
+if month_col is None:
+    raise KeyError(f"Couldn't find any column with 'month' in its name. Found: {df.columns.tolist()}")
+
+print(f"Using '{month_col}' as the Month column")
+
+df[month_col] = pd.to_datetime(df[month_col], format="%Y-%m")
+
+df_burglary = df[df["Crime type"].str.strip().str.lower() == "burglary"].copy()
+
+monthly_counts = (
+    df_burglary
+    .set_index(month_col)
+    .resample("M")
+    .size()
+    .rename("Count")
+)
+monthly_counts.index = monthly_counts.index.strftime("%Y-%m")
+
+plt.figure(figsize=(12, 5))
+monthly_counts.plot(kind="bar")
+plt.xticks(rotation=45, ha="right")
+plt.title("Monthly Burglary Incidents")
 plt.xlabel("Month")
 plt.ylabel("Number of Burglaries")
 plt.tight_layout()
 plt.show()
 
-outcome_data = []
+outcome_counts = df_burglary["Last outcome category"].value_counts()
 
-for folder in os.listdir(data_path):
-    month_folder = os.path.join(data_path, folder)
-
-    if os.path.isdir(month_folder):
-        for file in os.listdir(month_folder):
-            if "outcomes" in file and file.endswith(".csv"):
-                full_path = os.path.join(month_folder, file)
-                df = pd.read_csv(full_path)
-                outcome_data.append(df)
-
-outcomes_df = pd.concat(outcome_data, ignore_index=True)
-merged_df = pd.merge(burglary_df, outcomes_df, how='left', on=['Crime ID'])
-
-outcome_counts = merged_df['Outcome type'].value_counts()
-
-outcome_counts.plot(kind='bar', figsize=(10, 6), title="Burglary Outcome Types")
-plt.xlabel("Outcome Type")
+plt.figure(figsize=(12,5))
+outcome_counts.plot(kind="bar")
+plt.xticks(rotation=45, ha="right")
+plt.title("Burglary Outcome Types")
+plt.xlabel("Outcome category")
 plt.ylabel("Number of Cases")
-plt.xticks(rotation=45, ha='right')
 plt.tight_layout()
 plt.show()
 
+import calendar
+df_burglary['Year']     = df_burglary[month_col].dt.year
+df_burglary['MonthNum'] = df_burglary[month_col].dt.month
+
+monthly_year = (
+    df_burglary
+      .groupby(['MonthNum', 'Year'])
+      .size()
+      .unstack('Year', fill_value=0)
+)
+
+monthly_year.index = monthly_year.index.map(lambda m: calendar.month_name[m])
+
+plt.figure(figsize=(12,6))
+monthly_year.plot(kind='bar', width=0.8, figsize=(12,6))
+plt.title("Monthly Burglaries by Year")
+plt.xlabel("Month")
+plt.ylabel("Number of Burglaries")
+plt.xticks(rotation=45, ha='right')
+plt.legend(title='Year')
+plt.tight_layout()
+plt.show()
+
+plt.figure(figsize=(12,6))
+
+monthly_year.plot(
+    kind='bar',
+    stacked=True,
+    width=0.8,
+    figsize=(12,6)
+)
+
+plt.title("Monthly Burglaries by Year (Stacked)")
+plt.xlabel("Month")
+plt.ylabel("Number of Burglaries")
+plt.xticks(rotation=45, ha='right')
+plt.legend(title='Year', bbox_to_anchor=(1.02, 1), loc='upper left')
+plt.tight_layout()
+plt.show()
