@@ -3,7 +3,6 @@ import glob
 import pandas as pd
 import matplotlib.pyplot as plt
 import calendar
-from statsmodels.tsa.seasonal import seasonal_decompose
 from statsmodels.graphics.tsaplots import plot_acf
 
 def load_data(data="data_CBL"):
@@ -42,7 +41,6 @@ def plot_outcome_types(df_burglary):
     fig.tight_layout()
     plt.show()
 
-
 def plot_monthly_by_year_bar(df_burglary, month_col):
     df_burglary["Year"] = df_burglary[month_col].dt.year
     df_burglary["MonthNum"] = df_burglary[month_col].dt.month
@@ -62,7 +60,6 @@ def plot_monthly_by_year_bar(df_burglary, month_col):
     ax.legend(title='Year')
     fig.tight_layout()
     plt.show()
-
 
 def plot_monthly_by_year_stacked(df_burglary, month_col):
     df_burglary["Year"] = df_burglary[month_col].dt.year
@@ -94,7 +91,6 @@ def plot_time_series(monthly_counts):
     fig.tight_layout()
     plt.show()
 
-
 def plot_avg_by_month(monthly_counts):
     counts = monthly_counts[monthly_counts.index.year != 2025]
     avg_by_month = counts.groupby(counts.index.month).mean()
@@ -110,7 +106,6 @@ def plot_avg_by_month(monthly_counts):
     fig.tight_layout()
     plt.show()
 
-
 def plot_boxplot_monthly(monthly_counts):
     counts = monthly_counts[monthly_counts.index.year != 2025]
     df_counts = counts.to_frame(name="count")
@@ -125,24 +120,12 @@ def plot_boxplot_monthly(monthly_counts):
     fig.tight_layout()
     plt.show()
 
-
-def plot_seasonal_decompose(monthly_counts):
-    ts = monthly_counts.copy()
-    ts.index = pd.DatetimeIndex(ts.index, freq="M")
-    decomp = seasonal_decompose(ts, model='additive')
-    fig = decomp.plot()
-    fig.set_size_inches(12, 8)
-    fig.tight_layout()
-    plt.show()
-
-
 def plot_acf_monthly(monthly_counts, lags=24):
     fig, ax = plt.subplots(figsize=(12, 5))
     plot_acf(monthly_counts, lags=lags, ax=ax)
     ax.set_title("Autocorrelation of Monthly Burglary Counts")
     fig.tight_layout()
     plt.show()
-
 
 def plot_year_on_year_overlay(monthly_counts):
     df_counts = monthly_counts.to_frame(name="count")
@@ -172,7 +155,6 @@ def main():
     plot_time_series(monthly_counts)
     plot_avg_by_month(monthly_counts)
     plot_boxplot_monthly(monthly_counts)
-    plot_seasonal_decompose(monthly_counts)
     plot_acf_monthly(monthly_counts)
     plot_year_on_year_overlay(monthly_counts)
 
