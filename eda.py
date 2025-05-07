@@ -6,8 +6,8 @@ import calendar
 from statsmodels.graphics.tsaplots import plot_acf
 
 def load_data(data="data_CBL"):
-    street_files = glob.glob(os.path.join(data, "*", "*-street.csv"))
-    outcome_files = glob.glob(os.path.join(data, "*", "*-outcomes.csv"))
+    street_files = glob.glob(os.path.join(data, "*", "*-london-street.csv"))
+    outcome_files = glob.glob(os.path.join(data, "*", "*-london-outcomes.csv"))
     df_street = pd.concat((pd.read_csv(f) for f in street_files), ignore_index=True)
     df_outcome = pd.concat((pd.read_csv(f) for f in outcome_files), ignore_index=True)
     df = pd.merge(df_street, df_outcome, on="Crime ID", how="inner")

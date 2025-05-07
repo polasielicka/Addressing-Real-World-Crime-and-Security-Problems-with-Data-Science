@@ -5,8 +5,8 @@ import geopandas as gpd
 import matplotlib.pyplot as plt
 import contextily as ctx
 
-street_glob  = os.path.join("../data_CBL", "*", "*-street.csv")
-outcome_glob = os.path.join("../data_CBL", "*", "*-outcomes.csv")
+street_glob  = os.path.join("../data_CBL", "*", "*-london-street.csv")
+outcome_glob = os.path.join("../data_CBL", "*", "*-london-outcomes.csv")
 
 df_street  = pd.concat((pd.read_csv(fp) for fp in glob.glob(street_glob)),  ignore_index=True)
 df_outcome = pd.concat((pd.read_csv(fp) for fp in glob.glob(outcome_glob)), ignore_index=True)
