@@ -5,10 +5,10 @@ import matplotlib.pyplot as plt
 import calendar
 from statsmodels.graphics.tsaplots import plot_acf
 
-DATA_DIR = "../data_CBL"
+DATA_DIR = "../data_all"
 
 def load_data(data=DATA_DIR):
-    street_files = glob.glob(os.path.join(data, "*", "*-street.csv"))
+    street_files = glob.glob(os.path.join(data, "*", "*", "*-street.csv"))
     df = pd.concat((pd.read_csv(f) for f in street_files), ignore_index=True)
     month_col = next(c for c in df.columns if "month" in c.lower())
     df[month_col] = pd.to_datetime(df[month_col], format="%Y-%m")
