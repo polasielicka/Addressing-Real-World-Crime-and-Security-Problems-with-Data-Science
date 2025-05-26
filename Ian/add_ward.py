@@ -12,9 +12,9 @@ def lsoa_mapping():
     script_dir = os.path.dirname(os.path.abspath(__file__))
 
     data_dir = os.path.join(script_dir, '..', 'data_CBL', 'crime_data')
-    lookup_path_2024 = os.path.join(script_dir, '..', 'Ian',
+    lookup_path_2024 = os.path.join(script_dir, '..', 'data_CBL', 'best_fit_lsoa_data',
                                     'LSOA_(2021)_to_Electoral_Ward_(2024)_to_LAD_(2024)_Best_Fit_Lookup_in_EW.csv')
-    lookup_path_2018 = os.path.join(script_dir, '..', 'Ian',
+    lookup_path_2018 = os.path.join(script_dir, '..', 'data_CBL', 'best_fit_lsoa_data',
                                     'Lower_Layer_Super_Output_Area_(2011)_to_Ward_(2018)_Lookup_in_England_and_Wales_v3.csv')
 
     # Load crime data
@@ -60,7 +60,7 @@ def coordinate_mapping():
     """
     script_dir = os.path.dirname(os.path.abspath(__file__))
     data_dir = os.path.join(script_dir, '..', 'data_CBL', 'crime_data')
-    shapefile_path = os.path.join(script_dir, '..', "Ian", 'London-wards-2018_ESRI', 'London_Ward.shp')
+    shapefile_path = os.path.join(script_dir, '..', "data_CBL", 'coordinate_mapping_2018', 'London_Ward.shp')
 
     # Load crime data
     combined_data = glob.glob(os.path.join(data_dir, "*", "*-street.csv"))
@@ -108,7 +108,7 @@ def coordinate_mapping():
 # print(len(df))
 
 df = coordinate_mapping()
-# # print(df.head())
+print(df.head())
 # print(len(df[df['ward_name'].isnull()]))
 # print(df[df['ward_name'].isnull()])
 # print(df['ward_name'].nunique())
@@ -120,7 +120,7 @@ df = coordinate_mapping()
 # print(df[df['ward_name'].isnull()].describe())
 
 # Filter the rows where 'ward_name' is null
-missing_ward_df = df[df['ward_name'].isnull()]
+# missing_ward_df = df[df['ward_name'].isnull()]
 
 # 1. Basic info and count
 # print("Number of rows with missing ward_name:", len(missing_ward_df))
@@ -147,8 +147,8 @@ missing_ward_df = df[df['ward_name'].isnull()]
 # print(missing_ward_df.head(5))
 
 
-# df2 = lsoa_mapping()
-# # print(df2.head())
+df2 = lsoa_mapping()
+print(df2.head())
 # # print(df2[df2['ward'].isnull()])
 # # print(df2[df2['ward']].unique)
 # print(df2.isna().sum())
