@@ -40,16 +40,12 @@ def lsoa_mapping():
     ).rename(columns={'WD18NM': 'ward2018'}).drop(columns=['LSOA11CD'])
 
     # Combine ward information
-    df['ward'] = df['ward2024'].fillna(df['ward2018'])
+    df['ward_name'] = df['ward2024'].fillna(df['ward2018'])
 
     # Filter for burglaries
     burglary_df = df[df["Crime type"].str.lower() == "burglary"]
 
-    # removes rows that dont have location data
-    initial_row_count = len(burglary_df)
     burglary_df = burglary_df[burglary_df['LSOA code'].notna()]
-    removed_rows = initial_row_count - len(burglary_df)
-    print(f"Removed {removed_rows} rows with missing 'LSOA code'.")
 
     return burglary_df
 
@@ -107,8 +103,8 @@ def coordinate_mapping():
 # # 162358 total burglaries
 # print(len(df))
 
-df = coordinate_mapping()
-print(df.head())
+# df = coordinate_mapping()
+# print(df.head())
 # print(len(df[df['ward_name'].isnull()]))
 # print(df[df['ward_name'].isnull()])
 # print(df['ward_name'].nunique())
@@ -147,8 +143,8 @@ print(df.head())
 # print(missing_ward_df.head(5))
 
 
-df2 = lsoa_mapping()
-print(df2.head())
+# df2 = lsoa_mapping()
+# print(df2.head())
 # # print(df2[df2['ward'].isnull()])
 # # print(df2[df2['ward']].unique)
 # print(df2.isna().sum())
