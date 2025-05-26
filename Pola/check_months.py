@@ -8,7 +8,7 @@ from statsmodels.tsa.holtwinters import ExponentialSmoothing
 from statsmodels.tsa.statespace.sarimax import SARIMAX
 from prophet import Prophet
 
-DATA_DIR = "../data_all"
+DATA_DIR = "../data_CBL/crime_data" # maybe will need a fix
 
 def load_burglary_counts(data_dir):
     street_files = glob.glob(os.path.join(data_dir, "*", "*", "*-street.csv"))
