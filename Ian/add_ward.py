@@ -11,7 +11,7 @@ def lsoa_mapping():
     """
     script_dir = os.path.dirname(os.path.abspath(__file__))
 
-    data_dir = os.path.join(script_dir, '..', 'data_CBL')
+    data_dir = os.path.join(script_dir, '..', 'data_CBL', 'crime_data')
     lookup_path_2024 = os.path.join(script_dir, '..', 'Ian',
                                     'LSOA_(2021)_to_Electoral_Ward_(2024)_to_LAD_(2024)_Best_Fit_Lookup_in_EW.csv')
     lookup_path_2018 = os.path.join(script_dir, '..', 'Ian',
@@ -59,7 +59,7 @@ def coordinate_mapping():
     152 out of 160k instances of burglary cannot be mapped because they fall outside of the map.
     """
     script_dir = os.path.dirname(os.path.abspath(__file__))
-    data_dir = os.path.join(script_dir, '..', 'data_CBL')
+    data_dir = os.path.join(script_dir, '..', 'data_CBL', 'crime_data')
     shapefile_path = os.path.join(script_dir, '..', "Ian", 'London-wards-2018_ESRI', 'London_Ward.shp')
 
     # Load crime data
