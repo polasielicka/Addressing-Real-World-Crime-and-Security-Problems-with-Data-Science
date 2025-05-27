@@ -50,7 +50,7 @@ def load_data():
     )
 
     # read IMD data
-    imd_path = "CBL-group-5/data/IMD/imd_scores.xlsx"  # update to the actual Excel file name
+    imd_path = "CBL-group-5/data/IMD/imd_scores.xlsx" 
     imd = pd.read_excel(
         imd_path,
         sheet_name="IoD2019 Scores",
@@ -104,8 +104,7 @@ def report_missing_imd(merged_df):
 
 def aggregate_to_ward_month(df):
     df = df.copy()
-    # Create a normalized Month date where year is constant (e.g., 2000), but month and day stay the same
-    # Since your dates are monthly, just set day=1 and year=2000
+    
     df["Month"] = df["Month"].apply(lambda dt: dt.replace(year=2000, day=1))
     
     agg_dict = {
