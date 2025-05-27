@@ -12,10 +12,10 @@ def lsoa_mapping():
     """
     script_dir = os.path.dirname(os.path.abspath(__file__))
 
-    data_dir = os.path.join(script_dir, '..', 'data_CBL', 'crime_data')
-    lookup_path_2024 = os.path.join(script_dir, '..', 'data_CBL', 'best_fit_lsoa_data',
+    data_dir = os.path.join(script_dir, '..', 'data', 'crime_data')
+    lookup_path_2024 = os.path.join(script_dir, '..', 'data', 'best_fit_lsoa_data',
                                     'LSOA_(2021)_to_Electoral_Ward_(2024)_to_LAD_(2024)_Best_Fit_Lookup_in_EW.csv')
-    lookup_path_2018 = os.path.join(script_dir, '..', 'data_CBL', 'best_fit_lsoa_data',
+    lookup_path_2018 = os.path.join(script_dir, '..', 'data', 'best_fit_lsoa_data',
                                     'Lower_Layer_Super_Output_Area_(2011)_to_Ward_(2018)_Lookup_in_England_and_Wales_v3.csv')
 
     # Load crime data
@@ -56,8 +56,8 @@ def coordinate_mapping():
     152 out of 160k instances of burglary cannot be mapped because they fall outside of the map.
     """
     script_dir = os.path.dirname(os.path.abspath(__file__))
-    data_dir = os.path.join(script_dir, '..', 'data_CBL', 'crime_data')
-    shapefile_path = os.path.join(script_dir, '..', "data_CBL", 'coordinate_mapping_2018', 'London_Ward.shp')
+    data_dir = os.path.join(script_dir, '..', 'data', 'crime_data')
+    shapefile_path = os.path.join(script_dir, '..', "data", 'coordinate_mapping_2018', 'London_Ward.shp')
 
     # Load crime data
     combined_data = glob.glob(os.path.join(data_dir, "*", "*-street.csv"))
