@@ -34,9 +34,9 @@ def lsoa_mapping():
     if not combined_data:
         raise FileNotFoundError(f"No CSVs found in {data_dir}")
 
-    lookup_path_2024 = os.path.join(script_dir, '..', 'data', 'best_fit_lsoa_data',
+    lookup_path_2024 = os.path.join(script_dir, '..', 'data', 'best_fit_lsoa_data (dont use)',
                                     'LSOA_(2021)_to_Electoral_Ward_(2024)_to_LAD_(2024)_Best_Fit_Lookup_in_EW.csv')
-    lookup_path_2018 = os.path.join(script_dir, '..', 'data', 'best_fit_lsoa_data',
+    lookup_path_2018 = os.path.join(script_dir, '..', 'data', 'best_fit_lsoa_data (dont use)',
                                     'Lower_Layer_Super_Output_Area_(2011)_to_Ward_(2018)_Lookup_in_England_and_Wales_v3.csv')
 
     df_lsoa = pd.concat((pd.read_csv(f) for f in combined_data), ignore_index=True)
