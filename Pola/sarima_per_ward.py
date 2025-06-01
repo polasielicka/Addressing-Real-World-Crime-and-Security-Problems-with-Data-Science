@@ -6,6 +6,7 @@ from typing import Tuple
 
 import numpy as np
 import pandas as pd
+import matplotlib.pyplot as plt
 from sklearn.metrics import mean_absolute_error, mean_squared_error
 
 try:
@@ -13,6 +14,7 @@ try:
 except ImportError as err:
     raise ImportError("pmdarima is required – install via `pip install pmdarima`.") from err
 
+# Suppress deprecation warnings
 warnings.filterwarnings("ignore", category=FutureWarning)
 
 # Config
@@ -21,19 +23,21 @@ FORECAST_HORIZON = 24
 FUTURE_PERIODS = 12
 SEASONAL_PERIOD = 12
 
-
+# -----------------------------
+# LSOA to ward mapping function
+# -----------------------------
 def lsoa_mapping():
     script_dir = os.path.dirname(os.path.abspath(__file__))
-    data_dir = os.path.join(script_dir, '..', 'data_all')
+    data_dir = os.path.join(script_dir, '..', 'data_all')  # <-- corrected path
     combined_data = glob.glob(os.path.join(data_dir, '**', '*-street.csv'), recursive=True)
 
     if not combined_data:
         raise FileNotFoundError(f"No CSVs found in {data_dir}")
 
     lookup_path_2024 = os.path.join(script_dir, '..', 'data', 'best_fit_lsoa_data',
-                                     'LSOA_(2021)_to_Electoral_Ward_(2024)_to_LAD_(2024)_Best_Fit_Lookup_in_EW.csv')
+                                    'LSOA_(2021)_to_Electoral_Ward_(2024)_to_LAD_(2024)_Best_Fit_Lookup_in_EW.csv')
     lookup_path_2018 = os.path.join(script_dir, '..', 'data', 'best_fit_lsoa_data',
-                                     'Lower_Layer_Super_Output_Area_(2011)_to_Ward_(2018)_Lookup_in_England_and_Wales_v3.csv')
+                                    'Lower_Layer_Super_Output_Area_(2011)_to_Ward_(2018)_Lookup_in_England_and_Wales_v3.csv')
 
     df_lsoa = pd.concat((pd.read_csv(f) for f in combined_data), ignore_index=True)
 
@@ -59,6 +63,9 @@ def lsoa_mapping():
     return burglary_df[burglary_df['LSOA code'].notna()]
 
 
+# -----------------------------
+# Helper Functions
+# -----------------------------
 def load_burglary_counts_by_ward() -> pd.DataFrame:
     df = lsoa_mapping()
     df["Month"] = pd.to_datetime(df["Month"], format="%Y-%m")
@@ -70,13 +77,11 @@ def load_burglary_counts_by_ward() -> pd.DataFrame:
     )
     return grouped
 
-
 def train_test_split(series: pd.Series, horizon: int) -> Tuple[pd.Series, pd.Series]:
     test_index = series.index[-horizon:]
     test = series.loc[test_index]
     train = series.loc[:test_index[0] - pd.offsets.MonthBegin()]
     return train, test
-
 
 def fit_sarima(train: pd.Series, seasonal=True):
     return auto_arima(
@@ -91,7 +96,6 @@ def fit_sarima(train: pd.Series, seasonal=True):
         information_criterion="aicc",
     )
 
-
 def evaluate(y_true: pd.Series, y_pred: pd.Series) -> Tuple[float, float, float, float]:
     mae = mean_absolute_error(y_true, y_pred)
     rmse = np.sqrt(mean_squared_error(y_true, y_pred))
@@ -101,15 +105,15 @@ def evaluate(y_true: pd.Series, y_pred: pd.Series) -> Tuple[float, float, float,
     mase = mae / mase_denom if mase_denom != 0 else np.nan
     return mae, rmse, smape, mase
 
-
+# -----------------------------
+# Main Routine
+# -----------------------------
 def main():
     print("Loading burglary data by ward...")
     ward_monthly = load_burglary_counts_by_ward()
     print(f"Number of wards being forecasted: {ward_monthly.shape[1]}")
 
-    metrics_results = []
-    backtest_records = []
-    future_forecast_records = []
+    results = []
 
     for ward in ward_monthly.columns:
         print(f"\n=== Forecasting for ward: {ward} ===")
@@ -127,21 +131,12 @@ def main():
                 print("Seasonal model failed, trying non-seasonal ARIMA.")
                 sarima = fit_sarima(train, seasonal=False)
 
-            # Backtest forecast
             forecast = pd.Series(sarima.predict(n_periods=len(test)), index=test.index)
             mae, rmse, smape, mase = evaluate(test, forecast)
 
-            for date, pred, actual in zip(test.index, forecast, test):
-                backtest_records.append({
-                    "ward": ward,
-                    "month": date.strftime("%Y-%m-%d"),
-                    "actual": actual,
-                    "predicted": pred,
-                })
-
             print(f"MAE: {mae:.2f}  RMSE: {rmse:.2f}  SMAPE: {smape:.2f}%  MASE: {mase:.2f}")
 
-            metrics_results.append({
+            results.append({
                 "ward": ward,
                 "mae": mae,
                 "rmse": rmse,
@@ -149,21 +144,9 @@ def main():
                 "mase": mase,
             })
 
-            # Refit on full series and forecast future
-            sarima.update(series)
-            future_index = pd.date_range(series.index[-1] + pd.offsets.MonthBegin(), periods=FUTURE_PERIODS, freq="MS")
-            future_forecast = sarima.predict(n_periods=FUTURE_PERIODS)
-
-            for date, pred in zip(future_index, future_forecast):
-                future_forecast_records.append({
-                    "ward": ward,
-                    "month": date.strftime("%Y-%m-%d"),
-                    "forecast": pred,
-                })
-
         except Exception as e:
             print(f"Failed to model {ward}: {e}")
-            metrics_results.append({
+            results.append({
                 "ward": ward,
                 "mae": None,
                 "rmse": None,
@@ -173,19 +156,14 @@ def main():
             })
 
     os.makedirs("results", exist_ok=True)
+    output_path = os.path.join("results", "ward_forecast_metrics.csv")
 
-    # Save metrics
-    pd.DataFrame(metrics_results).to_csv("results/ward_forecast_metrics.csv", index=False)
-    print("✅ Forecast metrics saved to: results/ward_forecast_metrics.csv")
+    with open(output_path, "w", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=results[0].keys())
+        writer.writeheader()
+        writer.writerows(results)
 
-    # Save backtest forecasts
-    pd.DataFrame(backtest_records).to_csv("results/ward_backtest_forecasts.csv", index=False)
-    print("✅ Backtest forecasts saved to: results/ward_backtest_forecasts.csv")
-
-    # Save future forecasts
-    pd.DataFrame(future_forecast_records).to_csv("results/ward_future_forecasts.csv", index=False)
-    print("✅ Future forecasts saved to: results/ward_future_forecasts.csv")
-
+    print(f"\n✅ Forecast metrics saved to: {output_path}")
 
 if __name__ == "__main__":
     main()
