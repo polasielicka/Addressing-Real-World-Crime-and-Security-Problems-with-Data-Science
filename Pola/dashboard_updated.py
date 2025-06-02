@@ -22,7 +22,7 @@ forecast_df['ward'] = (
     .str.strip()
 )
 
-# Normalize ward names in GeoDataFrame for matching
+# Also normalize ward names in GeoDataFrame for matching
 gdf['NAME_clean'] = (
     gdf['NAME']
     .str.lower()
