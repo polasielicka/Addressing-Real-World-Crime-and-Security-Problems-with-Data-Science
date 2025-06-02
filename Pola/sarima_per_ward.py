@@ -23,9 +23,7 @@ FORECAST_HORIZON = 24
 FUTURE_PERIODS = 12
 SEASONAL_PERIOD = 12
 
-# -----------------------------
-# LSOA to ward mapping function
-# -----------------------------
+
 def lsoa_mapping():
     script_dir = os.path.dirname(os.path.abspath(__file__))
     data_dir = os.path.join(script_dir, '..', 'data_all')  # <-- corrected path
@@ -63,9 +61,6 @@ def lsoa_mapping():
     return burglary_df[burglary_df['LSOA code'].notna()]
 
 
-# -----------------------------
-# Helper Functions
-# -----------------------------
 def load_burglary_counts_by_ward() -> pd.DataFrame:
     df = lsoa_mapping()
     df["Month"] = pd.to_datetime(df["Month"], format="%Y-%m")
@@ -105,9 +100,6 @@ def evaluate(y_true: pd.Series, y_pred: pd.Series) -> Tuple[float, float, float,
     mase = mae / mase_denom if mase_denom != 0 else np.nan
     return mae, rmse, smape, mase
 
-# -----------------------------
-# Main Routine
-# -----------------------------
 def main():
     print("Loading burglary data by ward...")
     ward_monthly = load_burglary_counts_by_ward()
@@ -163,7 +155,7 @@ def main():
         writer.writeheader()
         writer.writerows(results)
 
-    print(f"\n✅ Forecast metrics saved to: {output_path}")
+    print(f"\n Forecast metrics saved to: {output_path}")
 
 if __name__ == "__main__":
     main()

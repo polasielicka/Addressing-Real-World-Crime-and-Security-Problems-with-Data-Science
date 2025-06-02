@@ -6,7 +6,7 @@ from dash import dcc, html, Input, Output
 import os
 
 script_dir = os.path.dirname(os.path.abspath(__file__))
-shapefile_path = os.path.join(script_dir, "..", "data_CBL", "coordinate_mapping_2018", "London_Ward.shp")
+shapefile_path = os.path.join(script_dir, "..", "data", "coordinate_mapping_2018", "London_Ward.shp")
 gdf = gpd.read_file(shapefile_path)
 gdf = gdf.to_crs(epsg=4326)
 
