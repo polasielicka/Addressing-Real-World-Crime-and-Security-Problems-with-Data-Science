@@ -6,7 +6,7 @@ from dash import dcc, html, Input, Output
 import os
 
 script_dir = os.path.dirname(os.path.abspath(__file__))
-shapefile_path = os.path.join(script_dir, "..", "data", "coordinate_mapping_2018", "London_Ward.shp")
+shapefile_path = os.path.join(script_dir, "..", "data", "coordinate_mapping_2025", "london_wards_area_weighted_IMD_CORRECTED.shp")
 gdf = gpd.read_file(shapefile_path)
 gdf = gdf.to_crs(epsg=4326)
 
@@ -22,7 +22,7 @@ fig = px.choropleth_mapbox(
     center={"lat": 51.5074, "lon": -0.1278},
     opacity=0.3,
     hover_name="NAME",
-    hover_data=["DISTRICT", "HECTARES"]
+    hover_data=["HECTARES", "weighted_I", "weighted_1"] # weighted_I is the IMD ranking, weighted_1 is the IMD score. Idk why they are called this, some shapefile save shenanigans.
 )
 fig.update_layout(margin={"r":0,"t":0,"l":0,"b":0})
 
@@ -43,7 +43,7 @@ def display_click_data(clickData):
     if clickData:
         idx = clickData["points"][0]["location"]
         ward = gdf.iloc[idx]
-        return f"Clicked Ward: {ward['NAME']} ({ward['DISTRICT']})"
+        return f"Clicked Ward: {ward['NAME']}"
     return "Placeholder, click on ward to show its name"
 
 if __name__ == "__main__":
