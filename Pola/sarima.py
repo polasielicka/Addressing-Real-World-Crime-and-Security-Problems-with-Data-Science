@@ -8,19 +8,12 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from sklearn.metrics import mean_absolute_error, mean_squared_error
 
-try:
-    from pmdarima import auto_arima
-except ImportError as err:
-    raise ImportError("pmdarima is required – install via `pip install pmdarima`.") from err
+from statsmodels.tsa.statespace.sarimax import SARIMAX
 
 DATA_DIR = "../data_all"
 FORECAST_HORIZON = 24             # months kept for out‑of‑sample evaluation
 FUTURE_PERIODS = 12               # months to forecast after refitting on full data
 SEASONAL_PERIOD = 12              # monthly seasonality (12 = yearly)
-
-# -----------------------------
-# Helper functions
-# -----------------------------
 
 def load_burglary_counts(data_dir: str) -> pd.Series:
     pattern = os.path.join(data_dir, "*", "*", "*-street.csv")
@@ -45,26 +38,20 @@ def load_burglary_counts(data_dir: str) -> pd.Series:
 def train_test_split(series: pd.Series, horizon: int) -> Tuple[pd.Series, pd.Series]:
     """Return (train, test) where *test* covers the last *horizon* months."""
     test = series.last(f"{horizon}MS")
-    # Anything strictly before the first test month forms the training set
     train = series.loc[: test.index[0] - pd.offsets.MonthBegin()]
     return train, test
 
 def fit_sarima(train: pd.Series):
-    """Run an auto‑ARIMA search to pick the best SARIMA order."""
-    model = auto_arima(
+    """Fit SARIMA(1,1,1)(1,0,2,12) model to training data."""
+    model = SARIMAX(
         train,
-        seasonal=True,
-        m=SEASONAL_PERIOD,
-        stepwise=True,
-        trace=True,
-        error_action="ignore",
-        suppress_warnings=True,
-        max_order=10,
-        information_criterion="aicc",
-        # Uncomment the next line if the variance grows with the mean:
-        # boxcox="log",
+        order=(1, 1, 1),
+        seasonal_order=(1, 0, 2, SEASONAL_PERIOD),
+        enforce_stationarity=False,
+        enforce_invertibility=False
     )
-    return model
+    results = model.fit(disp=False)
+    return results
 
 def evaluate(y_true: pd.Series, y_pred: pd.Series) -> Tuple[float, float]:
     mae = mean_absolute_error(y_true, y_pred)
@@ -98,11 +85,11 @@ def main(data_dir: str = DATA_DIR):
     print(f"Training on {len(train)} months, testing on {len(test)} months")
 
     # 3. Fit SARIMA on training set
-    print("\n>>> Searching for best SARIMA model (this may take a moment)...")
+    print("\n>>> Fitting SARIMA(1,1,1)(1,0,2,12) model...")
     sarima = fit_sarima(train)
-    print(f"\nSelected SARIMA order: {sarima.order} seasonal_order: {sarima.seasonal_order}\nAICc: {sarima.aicc():.2f}")
+    print(f"\nModel fitted. AIC: {sarima.aic:.2f}")
 
-    forecast_values = sarima.predict(n_periods=len(test))
+    forecast_values = sarima.predict(start=test.index[0], end=test.index[-1])
     forecast = pd.Series(forecast_values, index=test.index, name="forecast")
 
     mae, rmse = evaluate(test, forecast)
@@ -112,14 +99,22 @@ def main(data_dir: str = DATA_DIR):
     plot_series(train, test, forecast, "SARIMA Hold‑out Forecast vs Actual")
 
     # 6. Re‑fit on full data and forecast the future
-    sarima.update(series)
+    sarima = SARIMAX(
+        series,
+        order=(1, 1, 1),
+        seasonal_order=(1, 0, 2, SEASONAL_PERIOD),
+        enforce_stationarity=False,
+        enforce_invertibility=False
+    ).fit(disp=False)
+
     future_index = pd.date_range(series.index[-1] + pd.offsets.MonthBegin(), periods=FUTURE_PERIODS, freq="MS")
-    future_forecast = pd.Series(sarima.predict(n_periods=FUTURE_PERIODS), index=future_index, name="future_forecast")
+    future_forecast_values = sarima.predict(start=len(series), end=len(series) + FUTURE_PERIODS - 1)
+    future_forecast = pd.Series(future_forecast_values, index=future_index, name="future_forecast")
 
     print("\nNext 12‑month forecast:")
     print(future_forecast)
 
-
+    # Plot forecasted values as bar chart
     plt.figure(figsize=(12, 6))
     future_forecast.plot(kind='bar', color='skyblue')
     plt.title("Forecasted Burglaries for Next 12 Months (SARIMA)")
@@ -130,7 +125,7 @@ def main(data_dir: str = DATA_DIR):
     plt.tight_layout()
     plt.show()
 
-
+    # Plot full series with forecast
     plt.figure(figsize=(14, 6))
     series.plot(label="History", color="black")
     future_forecast.plot(label="12‑month forecast", color="tab:red")
