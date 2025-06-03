@@ -50,7 +50,7 @@ def load_data():
     )
 
     # read IMD data
-    imd_path = "CBL-group-5/data/IMD/imd_scores.xlsx"  # update to the actual Excel file name
+    imd_path = "CBL-group-5/data/IMD/imd_scores.xlsx" 
     imd = pd.read_excel(
         imd_path,
         sheet_name="IoD2019 Scores",
@@ -66,7 +66,7 @@ def load_data():
 
     merged_clean = pd.merge(burg_counts, imd, how='left', on='LSOA11CD').query("`Index of Multiple Deprivation (IMD) Score`.notna()").copy()
 
-    lookup_path = "CBL-group-5/data/best_fit_lsoa_data/Lower_Layer_Super_Output_Area_(2011)_to_Ward_(2018)_Lookup_in_England_and_Wales_v3.csv"
+    lookup_path = "CBL-group-5/data/best_fit_lsoa_data (dont use)/Lower_Layer_Super_Output_Area_(2011)_to_Ward_(2018)_Lookup_in_England_and_Wales_v3.csv"
     lsoa2ward = (
         pd.read_csv(lookup_path, usecols=["LSOA11CD","WD18NM"])
           .rename(columns={"WD18NM": "ward"})
@@ -104,8 +104,7 @@ def report_missing_imd(merged_df):
 
 def aggregate_to_ward_month(df):
     df = df.copy()
-    # Create a normalized Month date where year is constant (e.g., 2000), but month and day stay the same
-    # Since your dates are monthly, just set day=1 and year=2000
+    
     df["Month"] = df["Month"].apply(lambda dt: dt.replace(year=2000, day=1))
     
     agg_dict = {
