@@ -103,31 +103,30 @@ def report_missing_imd(merged_df):
     total_lsoas = merged_df["LSOA11CD"].nunique()
     print(f"Number of LSOAs without IMD data: {num_missing_lsoas} out of {total_lsoas} total LSOAs.")
 
-def aggregate_to_ward_month(df):
+def prepare_train_test_split(df):
     df = df.copy()
     
-    #df["Month"] = df["Month"].apply(lambda dt: dt.replace(year=2000, day=1))
-    
-    agg_dict = {
-        "burglaries": "sum",
-        "Index of Multiple Deprivation (IMD) Score": "mean",
-        "Income Score (rate)": "mean",
-        "Employment Score (rate)": "mean",
-        "Education, Skills and Training Score": "mean",
-        "Health Deprivation and Disability Score": "mean",
-        "Crime Score": "mean",
-        "Barriers to Housing and Services Score": "mean",
-        "Living Environment Score": "mean",
-        # add other IMD columns as needed
-    }
+    # extract year and month_num
+    df["year"] = df["Month"].dt.year
+    df["month_num"] = df["Month"].dt.month
 
-    ward_month_df = (
+    # drop month column
+    df = df.drop(columns=["Month"])
+
+    # IMD features
+    imd_features = [col for col in df.columns if 'Score' in col or 'Domain' in col or 'IMD' in col]
+
+    # aggregate by ward, year, and month_num (averaging IMD, summing burglaries)
+    agg_dict = {col: 'mean' for col in imd_features}
+    agg_dict["burglaries"] = "sum"
+
+    grouped_df = (
         df
-        .groupby(["ward", "Month"], as_index=False)
+        .groupby(["ward", "year", "month_num"], as_index=False)
         .agg(agg_dict)
     )
 
-    return ward_month_df
+    return grouped_df
 
 
 
@@ -137,28 +136,32 @@ def train_random_forest(data):
     # Identify IMD features (static per ward)
     imd_features = [col for col in df.columns if 'Score' in col or 'Domain' in col or 'IMD' in col]
     imd_df = df[['ward'] + imd_features].drop_duplicates(subset='ward')
-
-    # Add numeric month column
-    df['month_num'] = df['Month'].dt.month
     
     # Split into training and testing by year
-    train_df = df[df["year"] <= 2022]
-    test_df = df[df["year"] >= 2023]
+    train_df = df[df["year"] <= 2023]
+    test_df = df[df["year"] >= 2024]
 
-    # Aggregate both
-    train_agg = train_df.groupby(["ward", "month_num"], as_index=False)["burglaries"].mean()
-    test_agg = test_df.groupby(["ward", "month_num"], as_index=False)["burglaries"].mean()
+    # Aggregate both + add covid flag
+    train_agg = train_df.groupby(["ward", "year", "month_num"], as_index=False)["burglaries"].mean()
+    train_agg["covid_flag"] = (train_agg["year"] >= 2020).astype(int)
+    test_agg = test_df.groupby(["ward", "year", "month_num"], as_index=False)["burglaries"].mean()
+    test_agg["covid_flag"] = (test_agg["year"] >= 2020).astype(int)
 
     # Merge IMD into both
     train_agg = train_agg.merge(imd_df, on="ward", how="left")
     test_agg = test_agg.merge(imd_df, on="ward", how="left")
 
     # Prepare features and target
-    feature_cols = imd_features + ["month_num"]
+    feature_cols = imd_features + ["month_num", "covid_flag"]
     X_train = train_agg[feature_cols]
     y_train = train_agg["burglaries"]
     X_test = test_agg[feature_cols]
     y_test = test_agg["burglaries"]
+
+    # alternatively, do a stanard train-test split
+    # X = df[feature_cols]
+    # y = df["burglaries"]
+    # X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
 
     # Keep identifiers for results
     test_info = test_agg[["ward", "month_num"]].copy()
@@ -197,13 +200,16 @@ def train_random_forest(data):
     results_df["actual_burglaries"] = y_test.values
     results_df = results_df.sort_values(by=["ward", "month_num"]).reset_index(drop=True)
 
+    print("Description of Test Data:")
+    print(y_test.describe())
+
     return results_df, model
 
 def main():
     # load the data
     print("Loading data...")
     data = load_data()
-    #data = aggregate_to_ward_month(data)
+    data = prepare_train_test_split(data)
     print(f"Data loaded with {data.shape[0]} rows and {data.shape[1]} columns.")
 
     # save the data to an excel file
