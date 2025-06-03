@@ -1,4 +1,5 @@
 import os
+import numpy as np
 import pandas as pd
 from datetime import datetime
 import matplotlib.pyplot as plt
@@ -9,7 +10,7 @@ from sklearn.metrics import mean_squared_error, r2_score
 def load_data():
 
     # root directory containing folders with CSV files
-    root_dir = 'CBL-group-5/data/crime_data'  
+    root_dir = 'data/crime_data'  
 
     # list to hold dataframes
     df_list = []
@@ -50,7 +51,7 @@ def load_data():
     )
 
     # read IMD data
-    imd_path = "CBL-group-5/data/IMD/imd_scores.xlsx" 
+    imd_path = "data/IMD/imd_scores.xlsx" 
     imd = pd.read_excel(
         imd_path,
         sheet_name="IoD2019 Scores",
@@ -66,7 +67,7 @@ def load_data():
 
     merged_clean = pd.merge(burg_counts, imd, how='left', on='LSOA11CD').query("`Index of Multiple Deprivation (IMD) Score`.notna()").copy()
 
-    lookup_path = "CBL-group-5/data/best_fit_lsoa_data (dont use)/Lower_Layer_Super_Output_Area_(2011)_to_Ward_(2018)_Lookup_in_England_and_Wales_v3.csv"
+    lookup_path = "data/best_fit_lsoa_data (dont use)/Lower_Layer_Super_Output_Area_(2011)_to_Ward_(2018)_Lookup_in_England_and_Wales_v3.csv"
     lsoa2ward = (
         pd.read_csv(lookup_path, usecols=["LSOA11CD","WD18NM"])
           .rename(columns={"WD18NM": "ward"})
@@ -105,7 +106,7 @@ def report_missing_imd(merged_df):
 def aggregate_to_ward_month(df):
     df = df.copy()
     
-    df["Month"] = df["Month"].apply(lambda dt: dt.replace(year=2000, day=1))
+    #df["Month"] = df["Month"].apply(lambda dt: dt.replace(year=2000, day=1))
     
     agg_dict = {
         "burglaries": "sum",
@@ -133,89 +134,93 @@ def aggregate_to_ward_month(df):
 def train_random_forest(data):
     df = data.copy()
 
-    # keep identifiers for merging back later
-    identifiers = df[["ward", "Month"]].copy()
+    # Identify IMD features (static per ward)
+    imd_features = [col for col in df.columns if 'Score' in col or 'Domain' in col or 'IMD' in col]
+    imd_df = df[['ward'] + imd_features].drop_duplicates(subset='ward')
 
-    # clean and prepare the data
-    df['year'] = df['Month'].dt.year
+    # Add numeric month column
     df['month_num'] = df['Month'].dt.month
-    df = df.drop(columns=['Month'])
+    
+    # Split into training and testing by year
+    train_df = df[df["year"] <= 2022]
+    test_df = df[df["year"] >= 2023]
 
-    # select features and target variable
-    imd_features = [col for col in df.columns if 'Score' in col or 'rate' in col or 'Domain' in col]
-    temporal_features = ['year', 'month_num']
-    X = df[imd_features + temporal_features]
-    y = df['burglaries']
+    # Aggregate both
+    train_agg = train_df.groupby(["ward", "month_num"], as_index=False)["burglaries"].mean()
+    test_agg = test_df.groupby(["ward", "month_num"], as_index=False)["burglaries"].mean()
 
-    # add ward and month to X for later rejoining
-    X = X.copy()
-    X["ward"] = identifiers["ward"]
-    X["Month"] = identifiers["Month"]
+    # Merge IMD into both
+    train_agg = train_agg.merge(imd_df, on="ward", how="left")
+    test_agg = test_agg.merge(imd_df, on="ward", how="left")
 
+    # Prepare features and target
+    feature_cols = imd_features + ["month_num"]
+    X_train = train_agg[feature_cols]
+    y_train = train_agg["burglaries"]
+    X_test = test_agg[feature_cols]
+    y_test = test_agg["burglaries"]
 
-    # split the data into training and testing sets
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+    # Keep identifiers for results
+    test_info = test_agg[["ward", "month_num"]].copy()
 
-    # keep ward/month separate
-    test_info = X_test[["ward", "Month"]].copy()
-
-    # drop non-feature columns before training
-    X_train = X_train.drop(columns=["ward", "Month"])
-    X_test = X_test.drop(columns=["ward", "Month"])
-
-    # train the Random Forest model
+    # Train model
     model = RandomForestRegressor(n_estimators=100, random_state=42)
     model.fit(X_train, y_train)
 
-    # make predictions
+    # Predict on 2023–2024
     y_pred = model.predict(X_test)
 
-    # build a result DataFrame
-    results_df = test_info.copy()
-    results_df["predicted_burglaries"] = y_pred
-    results_df["actual_burglaries"] = y_test.values
-
-    # evaluate performance
+    # Evaluate
     mse = mean_squared_error(y_test, y_pred)
+    rmse = np.sqrt(mse)
     r2 = r2_score(y_test, y_pred)
-    print(f"Mean Squared Error: {mse:.2f}")
-    print(f"R² Score: {r2:.4f}")
 
-    # plot feature importances
-    print("Plotting feature importances...")
+    print(f"Evaluation on 2023–2024:")
+    print(f"  Mean Squared Error (MSE): {mse:.2f}")
+    print(f"  Root Mean Squared Error (RMSE): {rmse:.2f}")
+    print(f"  R-squared (R²): {r2:.2f}")
+
+    # Feature importances
     importances = model.feature_importances_
-    feat_names = X_train.columns
-
-    # visualize feature importances
+    sorted_idx = importances.argsort()
     plt.figure(figsize=(10, 6))
-    plt.barh(feat_names, importances)
+    plt.barh(range(len(sorted_idx)), importances[sorted_idx])
+    plt.yticks(range(len(sorted_idx)), [feature_cols[i] for i in sorted_idx])
     plt.xlabel("Feature Importance")
-    plt.title("Random Forest - Feature Importances")
+    plt.title("Random Forest Feature Importances")
     plt.tight_layout()
     plt.show()
 
-    return results_df
+    # Prepare final results DataFrame
+    results_df = test_info.copy()
+    results_df["predicted_burglaries"] = y_pred
+    results_df["actual_burglaries"] = y_test.values
+    results_df = results_df.sort_values(by=["ward", "month_num"]).reset_index(drop=True)
+
+    return results_df, model
 
 def main():
     # load the data
     print("Loading data...")
     data = load_data()
-    data = aggregate_to_ward_month(data)
+    #data = aggregate_to_ward_month(data)
     print(f"Data loaded with {data.shape[0]} rows and {data.shape[1]} columns.")
 
     # save the data to an excel file
-    os.makedirs("CBL-group-5/output", exist_ok=True) # avoid error
-    data.to_excel("CBL-group-5/output/data.xlsx", index=False)
+    os.makedirs("output", exist_ok=True) # avoid error
+    data.to_excel("output/data.xlsx", index=False)
     print("Data saved to data.xlsx")
 
     # train random forest model
     print("Training Random Forest model...")
-    results = train_random_forest(data)
-    print(f"Results saved with {results.shape[0]} rows and {results.shape[1]} columns.")
+    df_results, model = train_random_forest(data)
+    print(f"Results saved with {df_results.shape[0]} rows and {df_results.shape[1]} columns.")
 
     # save results to an excel file
-    results.to_excel("CBL-group-5/output/results.xlsx", index=False)
+    df_results.to_excel("output/results.xlsx", index=False)
     print("Results saved to results.xlsx")
+
+    # model saved to model variable
 
 if __name__ == "__main__":
     main()
