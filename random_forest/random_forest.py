@@ -185,7 +185,7 @@ def train_random_forest(data):
     # plot feature importances
     print("Plotting feature importances...")
     importances = model.feature_importances_
-    feat_names = X_train.columns  # <-- use X_train columns here
+    feat_names = X_train.columns
 
     # visualize feature importances
     plt.figure(figsize=(10, 6))
