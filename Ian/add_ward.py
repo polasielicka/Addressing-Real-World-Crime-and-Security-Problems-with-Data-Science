@@ -11,9 +11,8 @@ def coordinate_mapping():
     152 out of 160k instances of burglary cannot be mapped because they fall outside of the map.
     """
     script_dir = os.path.dirname(os.path.abspath(__file__))
-    data_dir = os.path.join(script_dir, '..', 'data', 'crime_data')
+    data_dir = os.path.join(script_dir, '..', 'data', 'data_all', '*03')
     shapefile_path = os.path.join(script_dir, '..', "data", 'coordinate_mapping_2025', 'london_only_wards_2025.shp')
-
     # Load crime data
     combined_data = glob.glob(os.path.join(data_dir, "*", "*-street.csv"))
     df_lsoa = pd.concat((pd.read_csv(f) for f in combined_data), ignore_index=True)
@@ -42,10 +41,10 @@ def coordinate_mapping():
     return df_with_wards
 
 
-# df = coordinate_mapping()
-# print(df.head())
-# print(len(df))
-# print(f"ward name is empty", len(df[df['ward_name'].isnull()]))
+df = coordinate_mapping()
+print(df.head())
+print(len(df))
+print(f"ward name is empty", len(df[df['ward_name'].isnull()]))
 # print(f"number of different wards with burgalaries", df['ward_name'].nunique())
 #
 #
