@@ -17,6 +17,11 @@ def coordinate_mapping():
     combined_data = glob.glob(os.path.join(data_dir, "*", "*-street.csv"))
     df_lsoa = pd.concat((pd.read_csv(f) for f in combined_data), ignore_index=True)
 
+    df_lsoa = df_lsoa.drop_duplicates(subset='Crime ID')
+
+    # Exclude entries from the year 2010
+    df_lsoa = df_lsoa[~df_lsoa["Month"].str.startswith("2010")]
+
     geometry = [Point(xy) for xy in zip(df_lsoa["Longitude"], df_lsoa["Latitude"])]
     gdf_points = gpd.GeoDataFrame(df_lsoa.copy(), geometry=geometry, crs='EPSG:4326')  # WGS84
 
@@ -40,12 +45,18 @@ def coordinate_mapping():
 
     return df_with_wards
 
-
-df = coordinate_mapping()
-print(df.head())
-print(len(df))
-print(f"ward name is empty", len(df[df['ward_name'].isnull()]))
+# pd.set_option('display.max_rows', None)      # Show all rows
+# pd.set_option('display.max_columns', None)   # Show all columns
+# pd.set_option('display.width', None)         # Don't limit width
+# pd.set_option('display.max_colwidth', None)  # Don't truncate column contents
+#
+# df = coordinate_mapping()
+# print(df.head())
+# print(df.tail())
+# print(len(df))
+# print(f"ward name is empty", len(df[df['ward_name'].isnull()]))
 # print(f"number of different wards with burgalaries", df['ward_name'].nunique())
+# print(df['Month'].nunique())
 #
 #
 # # Filter the rows where 'ward_name' is null
