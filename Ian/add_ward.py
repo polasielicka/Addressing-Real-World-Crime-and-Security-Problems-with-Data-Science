@@ -8,7 +8,7 @@ from shapely.geometry import Point
 def coordinate_mapping():
     """
     loads data and maps based on coordinates.
-    152 out of 160k instances of burglary cannot be mapped because they fall outside of the map.
+    599/915938 have no ward name
     """
     script_dir = os.path.dirname(os.path.abspath(__file__))
     data_dir = os.path.join(script_dir, '..', 'data', 'data_all', '*03')
@@ -17,10 +17,9 @@ def coordinate_mapping():
     combined_data = glob.glob(os.path.join(data_dir, "*", "*-street.csv"))
     df_lsoa = pd.concat((pd.read_csv(f) for f in combined_data), ignore_index=True)
 
+    # removes rows that dont have a crime ID, removes duplicate crime IDs
+    df_lsoa = df_lsoa[df_lsoa['Crime ID'].notna()]
     df_lsoa = df_lsoa.drop_duplicates(subset='Crime ID')
-
-    # Exclude entries from the year 2010
-    df_lsoa = df_lsoa[~df_lsoa["Month"].str.startswith("2010")]
 
     geometry = [Point(xy) for xy in zip(df_lsoa["Longitude"], df_lsoa["Latitude"])]
     gdf_points = gpd.GeoDataFrame(df_lsoa.copy(), geometry=geometry, crs='EPSG:4326')  # WGS84
@@ -37,13 +36,14 @@ def coordinate_mapping():
 
     # Add the ward name as a new column
     df_with_wards = joined.drop(columns='geometry').rename(columns={'NAME': 'ward_name'})
-
+    df_with_wards = df_with_wards[df_with_wards['ward_name'].notna()]
     # Filter for burglaries
     df_with_wards = df_with_wards[df_with_wards["Crime type"].str.lower() == "burglary"]
 
     df_with_wards = df_with_wards[df_with_wards['Longitude'].notna()]
 
     return df_with_wards
+
 
 # pd.set_option('display.max_rows', None)      # Show all rows
 # pd.set_option('display.max_columns', None)   # Show all columns
