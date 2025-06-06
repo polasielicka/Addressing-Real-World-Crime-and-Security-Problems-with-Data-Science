@@ -22,7 +22,7 @@ fig = px.choropleth_mapbox(
     center={"lat": 51.5074, "lon": -0.1278},
     opacity=0.3,
     hover_name="NAME",
-    hover_data=["HECTARES", "weighted_I", "weighted_1"] # weighted_I is the IMD ranking, weighted_1 is the IMD score. Idk why they are called this, some shapefile save shenanigans.
+    hover_data=["HECTARES", "Index of M"] # weighted_I is the IMD ranking, weighted_1 is the IMD score. Idk why they are called this, some shapefile save shenanigans.
 )
 fig.update_layout(margin={"r":0,"t":0,"l":0,"b":0})
 
