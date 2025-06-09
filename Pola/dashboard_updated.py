@@ -56,21 +56,28 @@ app.layout = html.Div([
         multi=True,
         placeholder="Select months to filter",
     ),
+    html.Div(id="summary-output", style={"fontSize": "20px", "marginTop": "10px", "fontWeight": "bold"}),
     dcc.Graph(id="ward-map"),
     html.Div(id="click-output"),
+    dcc.Tabs(id="tab-selector", value='ward', children=[
+        dcc.Tab(label='Selected Ward Forecast', value='ward'),
+        dcc.Tab(label='Top 10 Wards (Selected Months)', value='top10'),
+        dcc.Tab(label='Monthly Totals', value='monthly')
+    ]),
     dcc.Graph(id="forecast-bar", style={"marginTop": "30px"})
 ])
 
 @app.callback(
     [Output("ward-map", "figure"),
      Output("click-output", "children"),
-     Output("forecast-bar", "figure")],
+     Output("forecast-bar", "figure"),
+     Output("summary-output", "children")],
     [Input("ward-map", "clickData"),
-     Input("month-selector", "value")],
+     Input("month-selector", "value"),
+     Input("tab-selector", "value")],
     [State("ward-map", "figure")]
 )
-def update_dashboard(clickData, selected_months, current_map):
-    # Filter forecast data by selected months
+def update_dashboard(clickData, selected_months, selected_tab, current_map):
     filtered_df = forecast_agg[forecast_agg['month_label'].isin(selected_months)] if selected_months else forecast_agg.copy()
 
     # Map coloring data
@@ -93,18 +100,15 @@ def update_dashboard(clickData, selected_months, current_map):
     )
     fig_map.update_layout(margin={"r":0,"t":0,"l":0,"b":0})
 
-    # Initialize bar chart
-    fig_bar = px.bar(title="Click on a ward to see its forecast")
+    fig_bar = px.bar(title="Select a tab to display relevant chart")
     text = "Click on a ward to see its forecast."
 
-    if clickData:
+    if selected_tab == 'ward' and clickData:
         idx = clickData["points"][0]["location"]
         ward = gdf.iloc[idx]
         ward_name_clean = ward['NAME_clean']
         text = f"Clicked Ward: {ward['NAME']}"
-
         ward_forecast = filtered_df[filtered_df['ward'] == ward_name_clean]
-
         if not ward_forecast.empty:
             fig_bar = px.bar(
                 ward_forecast,
@@ -114,7 +118,31 @@ def update_dashboard(clickData, selected_months, current_map):
                 labels={"month_label": "Month", "forecast": "Predicted Burglaries"}
             )
 
-    return fig_map, text, fig_bar
+    elif selected_tab == 'top10':
+        top10 = (filtered_df.groupby('ward')['forecast'].sum()
+                 .sort_values(ascending=False).head(10).reset_index())
+        fig_bar = px.bar(
+            top10,
+            x="ward",
+            y="forecast",
+            title="Top 10 Wards by Predicted Burglaries",
+            labels={"ward": "Ward", "forecast": "Total Forecast"}
+        )
+
+    elif selected_tab == 'monthly':
+        monthly_totals = filtered_df.groupby('month_label')['forecast'].sum().reset_index()
+        fig_bar = px.bar(
+            monthly_totals,
+            x="month_label",
+            y="forecast",
+            title="Monthly Total Burglaries",
+            labels={"month_label": "Month", "forecast": "Total Forecast"}
+        )
+
+    total_forecast = filtered_df['forecast'].sum()
+    summary_text = f"Total Predicted Burglaries in Selected Months: {int(total_forecast)}"
+
+    return fig_map, text, fig_bar, summary_text
 
 if __name__ == "__main__":
     app.run(debug=True)
