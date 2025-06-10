@@ -1,7 +1,5 @@
-
 import os
 from Ian.add_ward import coordinate_mapping
-
 
 def load_data():
     # get directory paths
