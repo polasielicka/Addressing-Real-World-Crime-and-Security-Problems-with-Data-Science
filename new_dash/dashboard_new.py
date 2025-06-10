@@ -15,7 +15,7 @@ gdf = gpd.read_file(shapefile_path)
 gdf = gdf.to_crs(epsg=4326)
 
 # Standardize ward names IMPORTANT!!!
-gdf["ward"] = gdf["NAME"].str.replace(r"\s+ward$", "", case=False, regex=True).str.strip().str.lower()
+gdf["ward"] = gdf["NAME"].copy().str.replace(r"\s+ward$", "", case=False, regex=True).str.strip().str.lower()
 
 # sort on ward names in alphabetical order
 gdf = gdf.sort_values(by="ward").reset_index(drop=True)
@@ -26,9 +26,9 @@ gdf.to_excel(os.path.join(script_dir, "..", "output", "s.xlsx"), index=False)
 # ----------------------------
 # Load results
 # ----------------------------
-results_path = os.path.join(script_dir, "..", "output", "results.xlsx")
-df_results = pd.read_excel(results_path)
-df_results["ward"] = df_results["ward"].str.strip().str.lower()
+results_path = os.path.join(script_dir, "..", "output", "results.csv")
+df_results = pd.read_csv(results_path)
+df_results["ward"] = df_results["ward_name"].str.strip().str.lower()
 
 # ----------------------------
 # Setup Dash
