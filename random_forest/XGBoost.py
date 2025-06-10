@@ -153,16 +153,36 @@ def train_random_forest(data):
     # Keep identifiers for results
     test_info = test_agg[["ward_name", "month_num"]].copy()
 
+    # TO UNCOMMENT !!!
     # Train model (XGBoost without GridSearch)
     model = XGBRegressor(
-        n_estimators=200,
-        learning_rate=0.05,
+        n_estimators=450,
+        learning_rate=0.03185412750221407,
         max_depth=6,
-        subsample=0.8,
-        colsample_bytree=0.8,
-        random_state=42
+        subsample=0.792574766162736,
+        colsample_bytree=0.5669260594003166,
+        gamma=0.005468785930798914,
+        min_child_weight=8.22255986735738,
+        reg_alpha=0.7499107494699718,
+        reg_lambda=1.8263315045152857,
+        random_state=42,
+        n_jobs=-1
     )
+
+    # model = XGBRegressor(
+    #     n_estimators=200,
+    #     learning_rate=0.05,
+    #     max_depth=6,
+    #     subsample=0.8,
+    #     colsample_bytree=0.8,
+    #     random_state=42
+    # )
+
     model.fit(X_train, y_train)
+
+    # best_model, rs_obj = random_search_xgboost(X_train, y_train)
+    # model = best_model
+
 
     # Train model (using GridsearchCV for hyperparameter tuning)
     # param_grid = {
@@ -214,6 +234,56 @@ def train_random_forest(data):
     results_df = results_df.sort_values(by=["ward_name", "month_num"]).reset_index(drop=True)
 
     return results_df, model
+
+from sklearn.model_selection import RandomizedSearchCV
+from scipy.stats import randint, uniform
+
+def random_search_xgboost(X_train, y_train,
+                          n_iter: int = 150,
+                          cv: int = 3,
+                          random_state: int = 42):
+
+   
+    param_dist = {
+        "n_estimators": randint(100, 600),          
+        "learning_rate": uniform(0.01, 0.29),        
+        "max_depth": randint(3, 10),               
+        "min_child_weight": uniform(0.5, 9.5),     
+        "subsample": uniform(0.5, 0.5),           
+        "colsample_bytree": uniform(0.5, 0.5),     
+        "gamma": uniform(0, 0.4),                  
+        "reg_alpha": uniform(0, 1.0),          
+        "reg_lambda": uniform(0, 2.0)              
+    }
+
+    base_model = XGBRegressor(
+        objective="reg:squarederror",
+        tree_method="hist",          # fast histogram algorithm (CPU)
+        random_state=random_state,
+        n_jobs=-1
+    )
+
+    random_search = RandomizedSearchCV(
+        estimator=base_model,
+        param_distributions=param_dist,
+        n_iter=n_iter,
+        cv=cv,
+        scoring="neg_mean_squared_error",
+        verbose=1,
+        n_jobs=-1,
+        random_state=random_state
+    )
+
+    random_search.fit(X_train, y_train)
+
+    print("\nBest hyper-parameters found by RandomizedSearchCV:")
+    for k, v in random_search.best_params_.items():
+        print(f"   • {k:<18}: {v}")
+
+    best_model = random_search.best_estimator_
+
+    return best_model, random_search
+
 
 def main():
     # load the data
