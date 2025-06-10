@@ -13,7 +13,7 @@ def load_data():
     # save all data to an excel file in output folder
     output_dir = os.path.join(repo_root, 'output')
     os.makedirs(output_dir, exist_ok=True)
-    output_path = os.path.join(output_dir, 'all_data.csv')
+    output_path = os.path.join(output_dir, 'input_data.csv')
 
     # save all data to the csv file
     all_data.to_csv(output_path, index=False)

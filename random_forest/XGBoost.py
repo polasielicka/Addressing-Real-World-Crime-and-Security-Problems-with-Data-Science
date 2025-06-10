@@ -154,38 +154,39 @@ def train_random_forest(data):
     test_info = test_agg[["ward_name", "month_num"]].copy()
 
     # Train model (XGBoost without GridSearch)
-    # model = XGBRegressor(
-    #     n_estimators=200,
-    #     learning_rate=0.05,
-    #     max_depth=6,
-    #     subsample=0.8,
-    #     colsample_bytree=0.8,
-    #     random_state=42
-    # )
-    # model.fit(X_train, y_train)
+    model = XGBRegressor(
+        n_estimators=200,
+        learning_rate=0.05,
+        max_depth=6,
+        subsample=0.8,
+        colsample_bytree=0.8,
+        random_state=42
+    )
+    model.fit(X_train, y_train)
 
     # Train model (using GridsearchCV for hyperparameter tuning)
-    param_grid = {
-        'n_estimators': [100, 200, 300],
-        'learning_rate': [0.01, 0.05, 0.1],
-        'max_depth': [4, 6, 8],
-        'subsample': [0.7, 0.8, 1.0],
-        'colsample_bytree': [0.7, 0.8, 1.0]
-    }
+    # param_grid = {
+    #     'n_estimators': [100, 200, 300],
+    #     'learning_rate': [0.01, 0.05, 0.1],
+    #     'max_depth': [4, 6, 8],
+    #     'subsample': [0.7, 0.8, 1.0],
+    #     'colsample_bytree': [0.7, 0.8, 1.0]
+    # }
 
-    base_model = XGBRegressor(random_state=42)
-    grid_search = GridSearchCV(
-        estimator=base_model,
-        param_grid=param_grid,
-        cv=3,
-        scoring='neg_mean_squared_error',
-        n_jobs=-1,
-        verbose=1
-    )
-    grid_search.fit(X_train, y_train)
-    model = grid_search.best_estimator_
-    print("Best parameters found:", grid_search.best_params_)
-    model.fit(X_train, y_train)
+    # base_model = XGBRegressor(random_state=42)
+    # grid_search = GridSearchCV(
+    #     estimator=base_model,
+    #     param_grid=param_grid,
+    #     cv=3,
+    #     scoring='neg_mean_squared_error',
+    #     n_jobs=-1,
+    #     verbose=1
+    # )
+    # grid_search.fit(X_train, y_train)
+    # model = grid_search.best_estimator_
+    # print("Best parameters found:", grid_search.best_params_)
+    # model.fit(X_train, y_train)
+    ################################################################
 
     # Predict on 2023–2024
     y_pred = model.predict(X_test)
