@@ -10,11 +10,11 @@ def coordinate_mapping():
     599/915938 have no ward name.
     """
     script_dir = os.path.dirname(os.path.abspath(__file__))
-    project_root = os.path.abspath(os.path.join(script_dir, '..', '..', '..'))
-    datasets_dir = os.path.join(project_root, 'datasets')
+    project_root = os.path.abspath(os.path.join(script_dir, '..', '..'))
+    datasets_dir = os.path.join(project_root, 'CBL-group-5', 'data')
 
     # Match all '*-street.csv' files two levels deep (e.g., datasets/2016-03/2010-12/*.csv)
-    data_pattern = os.path.join(datasets_dir, 'crime_data', '*', '*', '*-street.csv')
+    data_pattern = os.path.join(datasets_dir, 'data_all', '*', '*', '*-street.csv')
     combined_data = glob.glob(data_pattern)
 
     if not combined_data:

@@ -12,9 +12,9 @@ from sklearn.model_selection import GridSearchCV
 def load_data():
     # get directory paths
     script_dir = os.path.dirname(os.path.abspath(__file__))
-    project_root = os.path.abspath(os.path.join(script_dir, '..', '..', '..'))
+    project_root = os.path.abspath(os.path.join(script_dir, '..', '..'))
     output_dir = os.path.abspath(os.path.join(script_dir, '..', 'output'))
-    datasets_dir = os.path.join(project_root, 'datasets')
+    datasets_dir = os.path.join(project_root, 'CBL-group-5','datasets')
 
     # read input burglary data from csv
     all_data_path = os.path.join(output_dir, 'input_data.csv')
