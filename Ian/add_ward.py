@@ -4,45 +4,54 @@ import pandas as pd
 import geopandas as gpd
 from shapely.geometry import Point
 
-
 def coordinate_mapping():
     """
-    loads data and maps based on coordinates.
-    599/915938 have no ward name
+    Loads data and maps based on coordinates.
+    599/915938 have no ward name.
     """
     script_dir = os.path.dirname(os.path.abspath(__file__))
-    data_dir = os.path.join(script_dir, '..', 'data', 'data_all', '*03')
-    shapefile_path = os.path.join(script_dir, '..', "data", 'coordinate_mapping_2025', 'london_only_wards_2025.shp')
-    # Load crime data
-    combined_data = glob.glob(os.path.join(data_dir, "*", "*-street.csv"))
+    project_root = os.path.abspath(os.path.join(script_dir, '..', '..', '..'))
+    datasets_dir = os.path.join(project_root, 'datasets')
+
+    # Match all '*-street.csv' files two levels deep (e.g., datasets/2016-03/2010-12/*.csv)
+    data_pattern = os.path.join(datasets_dir, 'crime_data', '*', '*', '*-street.csv')
+    combined_data = glob.glob(data_pattern)
+
+    if not combined_data:
+        raise FileNotFoundError(f"No CSV files found matching pattern: {data_pattern}")
+
+    # Shapefile path inside repo
+    shapefile_path = os.path.join(datasets_dir, 'coordinate_mapping_2025', 'london_only_wards_2025.shp')
+
+    # Load and concatenate crime data
     df_lsoa = pd.concat((pd.read_csv(f) for f in combined_data), ignore_index=True)
 
-    # removes rows that dont have a crime ID, removes duplicate crime IDs
+    # Clean data: remove rows with missing or duplicate Crime ID
     df_lsoa = df_lsoa[df_lsoa['Crime ID'].notna()]
     df_lsoa = df_lsoa.drop_duplicates(subset='Crime ID')
 
+    # Convert to GeoDataFrame
     geometry = [Point(xy) for xy in zip(df_lsoa["Longitude"], df_lsoa["Latitude"])]
-    gdf_points = gpd.GeoDataFrame(df_lsoa.copy(), geometry=geometry, crs='EPSG:4326')  # WGS84
+    gdf_points = gpd.GeoDataFrame(df_lsoa.copy(), geometry=geometry, crs='EPSG:4326')
 
     # Load ward shapefile
     wards = gpd.read_file(shapefile_path)
 
-    # Ensure coordinate systems match
+    # Match CRS if needed
     if wards.crs != gdf_points.crs:
         wards = wards.to_crs(gdf_points.crs)
 
-    # Spatial join to find the ward each point falls in
+    # Spatial join to get ward names
     joined = gpd.sjoin(gdf_points, wards[['NAME', 'geometry']], how='left', predicate='within')
 
-    # Add the ward name as a new column
+    # Add ward name and filter
     df_with_wards = joined.drop(columns='geometry').rename(columns={'NAME': 'ward_name'})
     df_with_wards = df_with_wards[df_with_wards['ward_name'].notna()]
-    # Filter for burglaries
     df_with_wards = df_with_wards[df_with_wards["Crime type"].str.lower() == "burglary"]
-
     df_with_wards = df_with_wards[df_with_wards['Longitude'].notna()]
 
     return df_with_wards
+
 
 
 # pd.set_option('display.max_rows', None)      # Show all rows

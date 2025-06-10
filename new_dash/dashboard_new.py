@@ -17,6 +17,12 @@ gdf = gdf.to_crs(epsg=4326)
 # Standardize ward names IMPORTANT!!!
 gdf["ward"] = gdf["NAME"].str.replace(r"\s+ward$", "", case=False, regex=True).str.strip().str.lower()
 
+# sort on ward names in alphabetical order
+gdf = gdf.sort_values(by="ward").reset_index(drop=True)
+
+# save Gdf to excel for debugging purposes
+gdf.to_excel(os.path.join(script_dir, "..", "output", "s.xlsx"), index=False)
+
 # ----------------------------
 # Load results
 # ----------------------------
