@@ -4,17 +4,30 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import calendar
 from statsmodels.graphics.tsaplots import plot_acf
-#test
+
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DATA_DIR = os.path.normpath(os.path.join(BASE_DIR, os.pardir, "data_CBL"))
+DATA_DIR = os.path.normpath(os.path.join(BASE_DIR, os.pardir, "data_all"))
+
 
 def load_data(data=DATA_DIR):
-    street_files = glob.glob(os.path.join(data, "*", "*-street.csv"))
+    # Recursively find all street-level CSVs in subfolders
+    street_files = glob.glob(os.path.join(data, "**", "*-street.csv"), recursive=True)
+
+    if not street_files:
+        raise FileNotFoundError(f"No street files found in {data}")
+
     df = pd.concat((pd.read_csv(f) for f in street_files), ignore_index=True)
-    month_col = next(c for c in df.columns if "month" in c.lower())
+
+    # Identify the column that contains the month info
+    month_col = next((c for c in df.columns if "month" in c.lower()), None)
+    if month_col is None:
+        raise ValueError("No column with 'month' in its name found.")
+
     df[month_col] = pd.to_datetime(df[month_col], format="%Y-%m")
     df = df[df["Crime type"].str.strip().str.lower() == "burglary"].copy()
+
     return df, month_col
+
 
 def compute_monthly_counts(df, month_col):
     return df.set_index(month_col).resample("M").size()
