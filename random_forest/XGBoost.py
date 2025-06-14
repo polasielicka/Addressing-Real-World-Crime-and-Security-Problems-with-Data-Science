@@ -14,7 +14,7 @@ def load_data():
     script_dir = os.path.dirname(os.path.abspath(__file__))
     project_root = os.path.abspath(os.path.join(script_dir, '..', '..'))
     output_dir = os.path.abspath(os.path.join(script_dir, '..', 'output'))
-    datasets_dir = os.path.join(project_root, 'CBL-group-5','datasets')
+    datasets_dir = os.path.join(project_root, 'CBL-group-5','data')
 
     # read input burglary data from csv
     all_data_path = os.path.join(output_dir, 'input_data.csv')
@@ -79,7 +79,7 @@ def load_data():
 
 def prepare_train_test_split(df):
     df = df.copy()
-    
+
     # extract year and month_num
     df["year"] = df["Month"].dt.year
     df["month_num"] = df["Month"].dt.month
@@ -111,7 +111,70 @@ def prepare_train_test_split(df):
 
     print(grouped_df.head())
 
-    return grouped_df
+    # -----------------------------------
+    # Missing months and wards fix
+    # -----------------------------------
+    df = grouped_df.reset_index()
+
+    all_months = pd.date_range(start="2011-12-01", end="2024-12-01", freq="MS")
+    all_months_df = pd.DataFrame({
+        'year': all_months.year,
+        'month_num': all_months.month
+    })
+
+    wards = df['ward_name'].unique()
+
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    project_root = os.path.abspath(os.path.join(script_dir, '..', '..'))
+    datasets_dir = os.path.join(project_root, 'CBL-group-5','data')
+    datasets_dir_path = Path(datasets_dir)
+    csv_path = datasets_dir_path / "coordinate_mapping_2025" / "IMD_mapping_result.shp"
+
+    if not csv_path.exists():
+        raise FileNotFoundError(f"IMD CSV file not found at {csv_path}")
+    df_imd = gpd.read_file(csv_path)
+
+    # rename columns for clarity
+    df_imd = df_imd.rename(columns={"NAME": "ward_name"})
+    duplicates = df_imd[df_imd.duplicated('ward_name', keep=False)]
+    print(duplicates['ward_name'].unique())
+
+    # new dataset
+    full_data = []
+
+    imd_cols = ['imd_score', 'income_score', 'employment_domain_score', 'education_domain_score',
+                'health_domain_score', 'crime_domain_score', 'housing_domain_score', 'environment_domain_score']
+
+    for ward in wards:
+        ward_df = df[df['ward_name'] == ward]
+
+        if ward_df.empty:
+            continue
+
+        # if month is missing, add month with buglaries = 0
+        imd_values = {col: ward_df[col].iloc[0] if col in ward_df.columns else 0 for col in imd_cols}
+
+        ward_months = all_months_df.copy()
+        ward_months['ward_name'] = ward
+        for col, val in imd_values.items():
+            ward_months[col] = val
+
+        merged = pd.merge(ward_months, ward_df, on=['ward_name', 'year', 'month_num'], how='left')
+
+        merged['burglaries'] = merged['burglaries'].fillna(0).astype(int)
+
+        for col in imd_cols:
+            if f"{col}_x" in merged.columns and f"{col}_y" in merged.columns:
+                merged[col] = merged[f"{col}_x"]
+                merged.drop([f"{col}_x", f"{col}_y"], axis=1, inplace=True)
+
+        merged = merged[['ward_name', 'year', 'month_num'] + imd_cols + ['burglaries']]
+        full_data.append(merged)
+
+    final_df = pd.concat(full_data)
+    final_df = final_df.sort_values(by=['ward_name', 'year', 'month_num'])
+
+    return final_df
 
 def train_random_forest(data):
     df = data.copy()
