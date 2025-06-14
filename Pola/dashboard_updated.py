@@ -2,31 +2,35 @@ import geopandas as gpd
 import json
 import plotly.express as px
 import dash
-from dash import dcc, html, Input, Output, State
+from dash import dcc, html, Input, Output
 import pandas as pd
 import os
+import calendar
 
 script_dir = os.path.dirname(os.path.abspath(__file__))
 shapefile_path = os.path.join(script_dir, "..", "data", "coordinate_mapping_2025", "IMD_mapping_result.shp")
 gdf = gpd.read_file(shapefile_path)
 gdf = gdf.to_crs(epsg=4326)
 
-# Load forecast data
-forecast_path = os.path.join(script_dir, "..", "Pola", "results", "ward_future_forecasts.csv")
-forecast_df = pd.read_csv(forecast_path)
-forecast_df['ward'] = (
-    forecast_df['ward']
+# Load XGBoost predictions
+xgb_path = os.path.join(script_dir, "..", "output", "results.csv")
+xgb_df = pd.read_csv(xgb_path)
+xgb_df['ward'] = (
+    xgb_df['ward_name']
     .str.lower()
     .str.replace("&", "and")
     .str.replace(" ward", "")
     .str.strip()
 )
+xgb_df['month_label'] = xgb_df['month_num'].apply(lambda m: calendar.month_name[m])
 
-# Format months to display just Year-Month
-forecast_df['month'] = pd.to_datetime(forecast_df['month'])
-forecast_df['month_label'] = forecast_df['month'].dt.strftime('%Y-%m')
+# Load SARIMA forecast data for overall prediction (next 12 months)
+sarima_forecast_path = os.path.join(script_dir, "..", "output", "sarima_forecast.csv")
+sarima_df = pd.read_csv(sarima_forecast_path)
+sarima_df['month'] = pd.to_datetime(sarima_df['month'])
+sarima_df['month_label'] = sarima_df['month'].dt.strftime('%B')
 
-# Normalize ward names in GeoDataFrame for matching
+# Normalize names in GeoDataFrame
 gdf['NAME_clean'] = (
     gdf['NAME']
     .str.lower()
@@ -35,20 +39,15 @@ gdf['NAME_clean'] = (
     .str.strip()
 )
 
-# Merge forecast once globally
-forecast_agg = forecast_df.groupby(['ward', 'month_label'])['forecast'].sum().reset_index()
-
-# Precompute base GeoJSON
 geojson_data = json.loads(gdf.to_json())
-
-# Prepare dropdown options for month filtering
-available_months = forecast_agg['month_label'].unique()
-available_months.sort()
+available_months = sorted(xgb_df['month_label'].unique(), key=lambda m: list(calendar.month_name).index(m))
 
 app = dash.Dash(__name__)
 
 app.layout = html.Div([
     html.H2("London Ward Boundaries and Forecasted Burglaries"),
+
+    html.Label("Month Filter:", style={"fontWeight": "bold", "marginBottom": "5px"}),
     dcc.Dropdown(
         id="month-selector",
         options=[{"label": m, "value": m} for m in available_months],
@@ -56,34 +55,74 @@ app.layout = html.Div([
         multi=True,
         placeholder="Select months to filter",
     ),
-    html.Div(id="summary-output", style={"fontSize": "20px", "marginTop": "10px", "fontWeight": "bold"}),
+
     dcc.Graph(id="ward-map"),
-    html.Div(id="click-output"),
+
     dcc.Tabs(id="tab-selector", value='ward', children=[
-        dcc.Tab(label='Selected Ward Forecast', value='ward'),
-        dcc.Tab(label='Top 10 Wards (Selected Months)', value='top10'),
-        dcc.Tab(label='Monthly Totals', value='monthly')
+        dcc.Tab(label='Selected Ward Prediction', value='ward'),
+        dcc.Tab(label='Top 10 Wards', value='top10'),
+        dcc.Tab(label='Overall Forecast for Special Operations', value='sarima')
     ]),
+
+    html.Div(id="click-output", style={"marginTop": "10px", "fontWeight": "bold"}),
     dcc.Graph(id="forecast-bar", style={"marginTop": "30px"})
 ])
 
 @app.callback(
     [Output("ward-map", "figure"),
      Output("click-output", "children"),
-     Output("forecast-bar", "figure"),
-     Output("summary-output", "children")],
+     Output("forecast-bar", "figure")],
     [Input("ward-map", "clickData"),
-     Input("month-selector", "value"),
-     Input("tab-selector", "value")],
-    [State("ward-map", "figure")]
+     Input("tab-selector", "value"),
+     Input("month-selector", "value")]
 )
-def update_dashboard(clickData, selected_months, selected_tab, current_map):
-    filtered_df = forecast_agg[forecast_agg['month_label'].isin(selected_months)] if selected_months else forecast_agg.copy()
-
-    # Map coloring data
-    map_data = filtered_df.groupby('ward')['forecast'].sum().reset_index().rename(columns={'forecast': 'total_forecast'})
+def update_dashboard(clickData, selected_tab, selected_months):
     gdf_copy = gdf.copy()
+    filtered_df = xgb_df[xgb_df['month_label'].isin(selected_months)] if selected_months else xgb_df.copy()
+    map_data = filtered_df.groupby('ward')['predicted_burglaries'].sum().reset_index().rename(columns={'predicted_burglaries': 'total_forecast'})
     gdf_copy = gdf_copy.merge(map_data, how='left', left_on='NAME_clean', right_on='ward')
+
+    text = ""
+    fig_bar = px.bar(title="Select a tab to display relevant chart")
+
+    if selected_tab == 'ward' and clickData:
+        idx = clickData["points"][0]["location"]
+        ward = gdf.iloc[idx]
+        ward_name = ward['NAME']
+        ward_name_clean = ward['NAME_clean']
+        pred_row = filtered_df[filtered_df['ward'] == ward_name_clean]
+        if not pred_row.empty:
+            monthly_sum = pred_row.groupby('month_label')['predicted_burglaries'].sum().reset_index()
+            fig_bar = px.bar(
+                monthly_sum,
+                x="month_label",
+                y="predicted_burglaries",
+                title=f"Monthly Predictions for {ward_name}",
+                labels={"month_label": "Month", "predicted_burglaries": "Predicted Burglaries"}
+            )
+            text = f"Clicked Ward: {ward_name}"
+
+    elif selected_tab == 'top10':
+        top10 = map_data.sort_values(by='total_forecast', ascending=False).head(10)
+        fig_bar = px.bar(
+            top10,
+            x="ward",
+            y="total_forecast",
+            title="Top 10 Wards",
+            labels={"ward": "Ward", "total_forecast": "Predicted Burglaries"}
+        )
+
+    elif selected_tab == 'sarima':
+        fig_bar = px.line(
+            sarima_df,
+            x="month_label",
+            y="forecast",
+            title="City-wide Forecast for the Next 12 Months",
+            labels={"month_label": "Month", "forecast": "Predicted Burglaries"}
+        )
+
+    if selected_tab != 'ward':
+        text = ""
 
     fig_map = px.choropleth_mapbox(
         gdf_copy,
@@ -96,53 +135,11 @@ def update_dashboard(clickData, selected_months, selected_tab, current_map):
         center={"lat": 51.5074, "lon": -0.1278},
         opacity=0.6,
         hover_name="NAME",
-        hover_data=["HECTARES", "IMDRank", "IMDDecil", "Index of M"]
+        hover_data={"HECTARES": True, "IMDRank": True, "IMDDecil": True, "Index of M": True, "total_forecast": False}
     )
     fig_map.update_layout(margin={"r":0,"t":0,"l":0,"b":0})
 
-    fig_bar = px.bar(title="Select a tab to display relevant chart")
-    text = "Click on a ward to see its forecast."
-
-    if selected_tab == 'ward' and clickData:
-        idx = clickData["points"][0]["location"]
-        ward = gdf.iloc[idx]
-        ward_name_clean = ward['NAME_clean']
-        text = f"Clicked Ward: {ward['NAME']}"
-        ward_forecast = filtered_df[filtered_df['ward'] == ward_name_clean]
-        if not ward_forecast.empty:
-            fig_bar = px.bar(
-                ward_forecast,
-                x="month_label",
-                y="forecast",
-                title=f"Forecast for {ward['NAME']}",
-                labels={"month_label": "Month", "forecast": "Predicted Burglaries"}
-            )
-
-    elif selected_tab == 'top10':
-        top10 = (filtered_df.groupby('ward')['forecast'].sum()
-                 .sort_values(ascending=False).head(10).reset_index())
-        fig_bar = px.bar(
-            top10,
-            x="ward",
-            y="forecast",
-            title="Top 10 Wards by Predicted Burglaries",
-            labels={"ward": "Ward", "forecast": "Total Forecast"}
-        )
-
-    elif selected_tab == 'monthly':
-        monthly_totals = filtered_df.groupby('month_label')['forecast'].sum().reset_index()
-        fig_bar = px.bar(
-            monthly_totals,
-            x="month_label",
-            y="forecast",
-            title="Monthly Total Burglaries",
-            labels={"month_label": "Month", "forecast": "Total Forecast"}
-        )
-
-    total_forecast = filtered_df['forecast'].sum()
-    summary_text = f"Total Predicted Burglaries in Selected Months: {int(total_forecast)}"
-
-    return fig_map, text, fig_bar, summary_text
+    return fig_map, text, fig_bar
 
 if __name__ == "__main__":
     app.run(debug=True)
