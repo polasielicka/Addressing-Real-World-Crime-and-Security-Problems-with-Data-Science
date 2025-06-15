@@ -47,13 +47,14 @@ app = dash.Dash(__name__)
 app.layout = html.Div([
     html.H2("London Ward Boundaries and Forecasted Burglaries"),
 
-    html.Label("Month Filter:", style={"fontWeight": "bold", "marginBottom": "5px"}),
-    dcc.Dropdown(
+    html.Label("Select Months:", style={"fontWeight": "bold", "marginBottom": "5px"}),
+    dcc.RangeSlider(
         id="month-selector",
-        options=[{"label": m, "value": m} for m in available_months],
-        value=list(available_months),
-        multi=True,
-        placeholder="Select months to filter",
+        min=0,
+        max=len(available_months) - 1,
+        value=[0, len(available_months) - 1],
+        marks={i: m for i, m in enumerate(available_months)},
+        step=None
     ),
 
     dcc.Graph(id="ward-map"),
@@ -76,9 +77,11 @@ app.layout = html.Div([
      Input("tab-selector", "value"),
      Input("month-selector", "value")]
 )
-def update_dashboard(clickData, selected_tab, selected_months):
+def update_dashboard(clickData, selected_tab, selected_month_range):
     gdf_copy = gdf.copy()
-    filtered_df = xgb_df[xgb_df['month_label'].isin(selected_months)] if selected_months else xgb_df.copy()
+    start_idx, end_idx = selected_month_range
+    selected_months = available_months[start_idx:end_idx + 1]
+    filtered_df = xgb_df[xgb_df['month_label'].isin(selected_months)]
     map_data = filtered_df.groupby('ward')['predicted_burglaries'].sum().reset_index().rename(columns={'predicted_burglaries': 'total_forecast'})
     gdf_copy = gdf_copy.merge(map_data, how='left', left_on='NAME_clean', right_on='ward')
 
