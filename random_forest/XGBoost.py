@@ -199,11 +199,15 @@ def train_XGBoost(data):
     train_df = df[df["year"] <= 2023]
     test_df = df[df["year"] >= 2024]
 
-    # Aggregate both + add covid flag
+    # Aggregate both + add covid flag (exclude Jan/Feb 2020 from covid period)
     train_agg = train_df.groupby(["ward_name", "year", "month_num"], as_index=False)["burglaries"].mean()
-    train_agg["covid_flag"] = (train_agg["year"] >= 2020).astype(int)
+    train_agg["covid_flag"] = (
+        ((train_agg["year"] > 2020) | ((train_agg["year"] == 2020) & (train_agg["month_num"] >= 3)))
+    ).astype(int)
     test_agg = test_df.groupby(["ward_name", "year", "month_num"], as_index=False)["burglaries"].mean()
-    test_agg["covid_flag"] = (test_agg["year"] >= 2020).astype(int)
+    test_agg["covid_flag"] = (
+        ((test_agg["year"] > 2020) | ((test_agg["year"] == 2020) & (test_agg["month_num"] >= 3)))
+    ).astype(int)
 
     # Merge IMD into both
     train_agg = train_agg.merge(imd_df, on="ward_name", how="left")
@@ -276,8 +280,8 @@ def main():
 
     # train random forest model
     print("Training XGBoost model...")
-    # df_results, model = train_XGBoost(data)
-    df_results, model = recursive_forecast_pipeline(data)
+    df_results, model = train_XGBoost(data)
+    #df_results, model = recursive_forecast(data)
 
     print(f"Results saved with {df_results.shape[0]} rows and {df_results.shape[1]} columns.")
 

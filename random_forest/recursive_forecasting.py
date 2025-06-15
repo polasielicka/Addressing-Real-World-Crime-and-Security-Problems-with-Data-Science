@@ -20,7 +20,7 @@ def add_covid_flag(df):
     df["covid_flag"] = ((df["year"] > 2020) | ((df["year"] == 2020) & (df["month_num"] > 2))).astype(int)
     return df
 
-def recursive_forecast_pipeline(df, forecast_years=[2024, 2025]):
+def recursive_forecast(df, forecast_years=[2024, 2025]):
     df = add_lags(df)
     df = add_covid_flag(df)
     
