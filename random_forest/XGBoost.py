@@ -3,6 +3,7 @@ import numpy as np
 import pandas as pd
 import geopandas as gpd
 import matplotlib.pyplot as plt
+import shap
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 from xgboost import XGBRegressor
 from xgboost import plot_importance
@@ -11,6 +12,7 @@ from sklearn.model_selection import GridSearchCV
 
 # recursive forecasting imports
 from recursive_forecasting import *
+from hybrid_forecasting import *
 
 def load_data():
     # get directory paths
@@ -112,11 +114,7 @@ def prepare_train_test_split(df):
         .agg(agg_dict)
     )
 
-    print(grouped_df.head())
-
-    # -----------------------------------
-    # Missing months and wards fix
-    # -----------------------------------
+    # missing months handling
     df = grouped_df.reset_index()
 
     all_months = pd.date_range(start="2011-12-01", end="2024-12-01", freq="MS")
@@ -140,7 +138,7 @@ def prepare_train_test_split(df):
     # rename columns for clarity
     df_imd = df_imd.rename(columns={"NAME": "ward_name"})
     duplicates = df_imd[df_imd.duplicated('ward_name', keep=False)]
-    print(duplicates['ward_name'].unique())
+    #print(duplicates['ward_name'].unique())
 
     # new dataset
     full_data = []
@@ -177,9 +175,20 @@ def prepare_train_test_split(df):
     final_df = pd.concat(full_data)
     final_df = final_df.sort_values(by=['ward_name', 'year', 'month_num'])
 
+    for lag in [1, 2, 3]:
+        final_df[f'lag{lag}'] = (
+            final_df
+            .groupby('ward_name')['burglaries']
+            .shift(lag)
+        )
+
+    # drop NANs created by lags
+    final_df = final_df.dropna(subset=[f'lag{lag}' for lag in [1, 2, 3]])
+
     return final_df
 
-def train_XGBoost(data):
+def train_XGBoost(data, forecast_year, lag_range):
+    # copy the data to avoid modifying the original
     df = data.copy()
 
     # Identify IMD features (static per ward)
@@ -196,20 +205,19 @@ def train_XGBoost(data):
     imd_df = df[['ward_name'] + imd_features].drop_duplicates(subset='ward_name')
 
     # Split into training and testing by year (2023 and earlier for training, 2024 for testing)
-    train_df = df[df["year"] <= 2023]
-    test_df = df[df["year"] >= 2024]
+    train_df = df[df["year"] < forecast_year]
+    test_df = df[df["year"] == forecast_year]
 
-    # Aggregate both + add covid flag (exclude Jan/Feb 2020 from covid period)
+    # Aggregate both + add covid flag
     train_agg = train_df.groupby(["ward_name", "year", "month_num"], as_index=False)["burglaries"].mean()
-    train_agg["covid_flag"] = (
-        ((train_agg["year"] > 2020) | ((train_agg["year"] == 2020) & (train_agg["month_num"] >= 3)))
-    ).astype(int)
     test_agg = test_df.groupby(["ward_name", "year", "month_num"], as_index=False)["burglaries"].mean()
-    test_agg["covid_flag"] = (
-        ((test_agg["year"] > 2020) | ((test_agg["year"] == 2020) & (test_agg["month_num"] >= 3)))
-    ).astype(int)
 
-    # Merge IMD into both
+    train_agg["covid_flag"] = ((train_agg["year"] > 2020) |
+                               ((train_agg["year"] == 2020) & (train_agg["month_num"] >= 3))).astype(int)
+    test_agg["covid_flag"] = ((test_agg["year"] > 2020) |
+                              ((test_agg["year"] == 2020) & (test_agg["month_num"] >= 3))).astype(int)
+
+    # Merge in IMD features
     train_agg = train_agg.merge(imd_df, on="ward_name", how="left")
     test_agg = test_agg.merge(imd_df, on="ward_name", how="left")
 
@@ -242,31 +250,54 @@ def train_XGBoost(data):
     # Predict on 2023–2024
     y_pred = model.predict(X_test)
 
-    # Evaluate
-    mse = mean_squared_error(y_test, y_pred)
-    rmse = np.sqrt(mse)
-    r2 = r2_score(y_test, y_pred)
-
-    print(f"Evaluation on 2023–2024:")
-    print(f"  Mean Squared Error (MSE): {mse:.2f}")
-    print(f"  Root Mean Squared Error (RMSE): {rmse:.2f}")
-    print(f"  R-squared (R²): {r2:.2f}")
-
-    # Feature importances
-    plot_importance(model, max_num_features=20, importance_type='weight')
-    plt.title("Feature Importances (Gain)")
-    plt.tight_layout()
-    plt.show()
-
     # Prepare final results DataFrame
     results_df = test_info.copy()
     results_df["predicted_burglaries"] = y_pred
     results_df["actual_burglaries"] = y_test.values
     results_df = results_df.sort_values(by=["ward_name", "month_num"]).reset_index(drop=True)
 
-    return results_df, model
+    return results_df, model, X_test
+
+def evaluate_model(model, y_pred, y_test, X_test, forecast_year):
+    mse = mean_squared_error(y_test, y_pred)
+    rmse = np.sqrt(mse)
+    r2 = r2_score(y_test, y_pred)
+
+    if forecast_year is not None:
+        print(f"Model Evaluation on {forecast_year}:")
+    else:
+        print("Model Evaluation:")
+    print(f"  Mean Squared Error (MSE): {mse:.2f}")
+    print(f"  Root Mean Squared Error (RMSE): {rmse:.2f}")
+    print(f"  R-squared (R²): {r2:.2f}")
+
+    # XGBoost feature importance plot
+    try:
+        plot_importance(model, max_num_features=50, importance_type='weight')
+        plt.title("Feature Importances (Weight)")
+        plt.tight_layout()
+        plt.show()
+    except Exception:
+        pass
+
+    # SHAP values and summary plot
+    try:
+        print("Generating SHAP summary plot...")
+        explainer = shap.Explainer(model)
+        shap_values = explainer(X_test)
+
+        shap.summary_plot(shap_values, X_test, max_display=20)
+    except Exception as e:
+        print("SHAP summary plot could not be generated:", str(e))
+
+    return mse, rmse, r2
 
 def main():
+    # initialize some variables
+    forecast_year = 2024
+    lag_size = 12
+    assert lag_size <= 12 and lag_size >= 1, "lag_range must be between 1 and 12"
+
     # load the data
     print("Loading data...")
     data = load_data()
@@ -278,18 +309,19 @@ def main():
     data.to_csv("output/data_cleaned.csv", index=False)
     print("Data saved to data_cleaned.csv")
 
-    # train random forest model
+    # train random forest model (uncomment to chose model)
     print("Training XGBoost model...")
-    df_results, model = train_XGBoost(data)
-    #df_results, model = recursive_forecast(data)
-
+    #df_results, model, X_test = train_XGBoost(data, forecast_year, lag_range=range(1, lag_size + 1))
+    df_results, model, X_test = recursive_forecast(data, forecast_years=[forecast_year], lag_range=range(1, lag_size + 1))
+    #df_results, model, X_test = hybrid_forecast(data, forecast_year, lag_range=range(1, lag_size + 1))
     print(f"Results saved with {df_results.shape[0]} rows and {df_results.shape[1]} columns.")
 
     # save results to a csv file
     df_results.to_csv("output/results.csv", index=False)
     print("Results saved to results.csv")
 
-    # model saved to model variable
+    # evaluate the model
+    evaluate_model(model, df_results["predicted_burglaries"], df_results["actual_burglaries"], X_test, forecast_year)
 
 if __name__ == "__main__":
     main()

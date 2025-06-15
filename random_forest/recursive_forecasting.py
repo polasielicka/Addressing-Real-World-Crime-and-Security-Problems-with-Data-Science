@@ -9,9 +9,9 @@ import os
 def load_data():
     return pd.read_csv("output/data_cleaned.csv")
 
-def add_lags(df, lags=[1, 2, 3]):
+def add_lags(df, lag_range):  # lag_1 to lag_12
     df = df.sort_values(["ward_name", "year", "month_num"])
-    for lag in lags:
+    for lag in lag_range:
         df[f"lag_{lag}"] = df.groupby("ward_name")["burglaries"].shift(lag)
     return df
 
@@ -20,22 +20,21 @@ def add_covid_flag(df):
     df["covid_flag"] = ((df["year"] > 2020) | ((df["year"] == 2020) & (df["month_num"] > 2))).astype(int)
     return df
 
-def recursive_forecast(df, forecast_years=[2024, 2025]):
-    df = add_lags(df)
+def recursive_forecast(df, forecast_years, lag_range):
+    df = add_lags(df, lag_range)
     df = add_covid_flag(df)
     
     df_results_list = []
     model = None
 
     features = [
-    "imd_score", "income_score", "employment_domain_score",
-    "education_domain_score", "health_domain_score", "crime_domain_score",
-    "housing_domain_score", "environment_domain_score",
-    "lag_1", "lag_2", "lag_3", "covid_flag",
-    "month_num"
-    ]
+        "imd_score", "income_score", "employment_domain_score",
+        "education_domain_score", "health_domain_score", "crime_domain_score",
+        "housing_domain_score", "environment_domain_score",
+        "covid_flag", "month_num"
+    ] + [f"lag_{i}" for i in lag_range]
 
-    # We'll collect true and predicted values to evaluate later
+    # collect true and predicted values to evaluate later
     y_true_all = []
     y_pred_all = []
 
@@ -51,7 +50,7 @@ def recursive_forecast(df, forecast_years=[2024, 2025]):
         model = xgb.XGBRegressor(n_estimators=100, max_depth=4, learning_rate=0.1)
         model.fit(X_train, y_train)
 
-        for month in range(1, 13):
+        for month in lag_range:
             month_df = test_df[test_df["month_num"] == month].copy()
             preds = []
 
@@ -59,15 +58,17 @@ def recursive_forecast(df, forecast_years=[2024, 2025]):
                 ward = row["ward_name"]
                 past_data = df[(df["ward_name"] == ward) & (
                     (df["year"] < year) | ((df["year"] == year) & (df["month_num"] < month))
-                )].sort_values(["year", "month_num"]).tail(3)
+                )].sort_values(["year", "month_num"]).tail(12)
 
                 if len(past_data) < 3:
                     # Skip if not enough past data to fill lags
                     continue
 
-                lags = past_data["burglaries"].values[::-1]  # reverse for lag_1, lag_2, lag_3
-                if len(lags) < 3:
+                lags = past_data["burglaries"].values[::-1]  # latest to oldest
+                if len(lags) < len(lag_range):
                     continue
+                for i in range(len(lag_range)):
+                    row[f"lag_{i+1}"] = lags[i]
 
                 row["lag_1"], row["lag_2"], row["lag_3"] = lags[0], lags[1], lags[2]
 
@@ -92,26 +93,8 @@ def recursive_forecast(df, forecast_years=[2024, 2025]):
 
             df_results_list.extend(preds)
 
-    # Evaluation
-    y_true_all = np.array(y_true_all)
-    y_pred_all = np.array(y_pred_all)
-
-    mse = mean_squared_error(y_true_all, y_pred_all)
-    rmse = np.sqrt(mse)
-    r2 = r2_score(y_true_all, y_pred_all)
-
-    print(f"Evaluation on {forecast_years}:")
-    print(f"  Mean Squared Error (MSE): {mse:.2f}")
-    print(f"  Root Mean Squared Error (RMSE): {rmse:.2f}")
-    print(f"  R-squared (R²): {r2:.2f}")
-
-    # Feature importances plot
-    plot_importance(model, max_num_features=20, importance_type='weight')
-    plt.title("Feature Importances (Weight)")
-    plt.tight_layout()
-    plt.show()
-
     df_results = pd.DataFrame(df_results_list)
     df_results = df_results.sort_values(by=["ward_name", "month_num"]).reset_index(drop=True)
 
-    return df_results, model
+    X_test = test_df[features] if 'test_df' in locals() else None
+    return df_results, model, X_test
