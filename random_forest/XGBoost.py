@@ -3,11 +3,14 @@ import numpy as np
 import pandas as pd
 import geopandas as gpd
 import matplotlib.pyplot as plt
-from sklearn.metrics import mean_squared_error, r2_score
+from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 from xgboost import XGBRegressor
 from xgboost import plot_importance
 from pathlib import Path
 from sklearn.model_selection import GridSearchCV
+
+# recursive forecasting imports
+from recursive_forecasting import *
 
 def load_data():
     # get directory paths
@@ -176,7 +179,7 @@ def prepare_train_test_split(df):
 
     return final_df
 
-def train_random_forest(data):
+def train_XGBoost(data):
     df = data.copy()
 
     # Identify IMD features (static per ward)
@@ -196,11 +199,15 @@ def train_random_forest(data):
     train_df = df[df["year"] <= 2023]
     test_df = df[df["year"] >= 2024]
 
-    # Aggregate both + add covid flag
+    # Aggregate both + add covid flag (exclude Jan/Feb 2020 from covid period)
     train_agg = train_df.groupby(["ward_name", "year", "month_num"], as_index=False)["burglaries"].mean()
-    train_agg["covid_flag"] = (train_agg["year"] >= 2020).astype(int)
+    train_agg["covid_flag"] = (
+        ((train_agg["year"] > 2020) | ((train_agg["year"] == 2020) & (train_agg["month_num"] >= 3)))
+    ).astype(int)
     test_agg = test_df.groupby(["ward_name", "year", "month_num"], as_index=False)["burglaries"].mean()
-    test_agg["covid_flag"] = (test_agg["year"] >= 2020).astype(int)
+    test_agg["covid_flag"] = (
+        ((test_agg["year"] > 2020) | ((test_agg["year"] == 2020) & (test_agg["month_num"] >= 3)))
+    ).astype(int)
 
     # Merge IMD into both
     train_agg = train_agg.merge(imd_df, on="ward_name", how="left")
@@ -216,8 +223,7 @@ def train_random_forest(data):
     # Keep identifiers for results
     test_info = test_agg[["ward_name", "month_num"]].copy()
 
-    # TO UNCOMMENT !!!
-    # Train model (XGBoost without GridSearch)
+    # Train model (XGBoost with hyperparameters found w/ RandomizedSearchCV)
     model = XGBRegressor(
         n_estimators=450,
         learning_rate=0.03185412750221407,
@@ -231,45 +237,7 @@ def train_random_forest(data):
         random_state=42,
         n_jobs=-1
     )
-
-    # model = XGBRegressor(
-    #     n_estimators=200,
-    #     learning_rate=0.05,
-    #     max_depth=6,
-    #     subsample=0.8,
-    #     colsample_bytree=0.8,
-    #     random_state=42
-    # )
-
     model.fit(X_train, y_train)
-
-    # best_model, rs_obj = random_search_xgboost(X_train, y_train)
-    # model = best_model
-
-
-    # Train model (using GridsearchCV for hyperparameter tuning)
-    # param_grid = {
-    #     'n_estimators': [100, 200, 300],
-    #     'learning_rate': [0.01, 0.05, 0.1],
-    #     'max_depth': [4, 6, 8],
-    #     'subsample': [0.7, 0.8, 1.0],
-    #     'colsample_bytree': [0.7, 0.8, 1.0]
-    # }
-
-    # base_model = XGBRegressor(random_state=42)
-    # grid_search = GridSearchCV(
-    #     estimator=base_model,
-    #     param_grid=param_grid,
-    #     cv=3,
-    #     scoring='neg_mean_squared_error',
-    #     n_jobs=-1,
-    #     verbose=1
-    # )
-    # grid_search.fit(X_train, y_train)
-    # model = grid_search.best_estimator_
-    # print("Best parameters found:", grid_search.best_params_)
-    # model.fit(X_train, y_train)
-    ################################################################
 
     # Predict on 2023–2024
     y_pred = model.predict(X_test)
@@ -298,56 +266,6 @@ def train_random_forest(data):
 
     return results_df, model
 
-from sklearn.model_selection import RandomizedSearchCV
-from scipy.stats import randint, uniform
-
-def random_search_xgboost(X_train, y_train,
-                          n_iter: int = 150,
-                          cv: int = 3,
-                          random_state: int = 42):
-
-   
-    param_dist = {
-        "n_estimators": randint(100, 600),          
-        "learning_rate": uniform(0.01, 0.29),        
-        "max_depth": randint(3, 10),               
-        "min_child_weight": uniform(0.5, 9.5),     
-        "subsample": uniform(0.5, 0.5),           
-        "colsample_bytree": uniform(0.5, 0.5),     
-        "gamma": uniform(0, 0.4),                  
-        "reg_alpha": uniform(0, 1.0),          
-        "reg_lambda": uniform(0, 2.0)              
-    }
-
-    base_model = XGBRegressor(
-        objective="reg:squarederror",
-        tree_method="hist",          # fast histogram algorithm (CPU)
-        random_state=random_state,
-        n_jobs=-1
-    )
-
-    random_search = RandomizedSearchCV(
-        estimator=base_model,
-        param_distributions=param_dist,
-        n_iter=n_iter,
-        cv=cv,
-        scoring="neg_mean_squared_error",
-        verbose=1,
-        n_jobs=-1,
-        random_state=random_state
-    )
-
-    random_search.fit(X_train, y_train)
-
-    print("\nBest hyper-parameters found by RandomizedSearchCV:")
-    for k, v in random_search.best_params_.items():
-        print(f"   • {k:<18}: {v}")
-
-    best_model = random_search.best_estimator_
-
-    return best_model, random_search
-
-
 def main():
     # load the data
     print("Loading data...")
@@ -362,7 +280,9 @@ def main():
 
     # train random forest model
     print("Training XGBoost model...")
-    df_results, model = train_random_forest(data)
+    df_results, model = train_XGBoost(data)
+    #df_results, model = recursive_forecast(data)
+
     print(f"Results saved with {df_results.shape[0]} rows and {df_results.shape[1]} columns.")
 
     # save results to a csv file

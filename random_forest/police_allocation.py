@@ -32,7 +32,6 @@ def allocation():
     # rename columns for clarity
     df_final = df_imd.rename(columns={"NAME": "ward_name"})
 
-
     # rename columns (shapefile column names are bugged)
     df_final = df_final.rename(columns={
         "ward_name": "ward_name",
