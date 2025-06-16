@@ -20,12 +20,21 @@ pd.set_option('display.max_rows', None)      # Show all rows
 pd.set_option('display.max_columns', None)   # Show all columns
 pd.set_option('display.width', None)         # Don't limit width
 pd.set_option('display.max_colwidth', None)  # Don't truncate column contents
-print(lsoa.head())
-print(lsoa.columns)
-print(imd_df.head())
-print(imd_df.columns)
-print(wards.head())
-print(wards.columns)
+# print(lsoa.head())
+# print(lsoa.columns)
+# print(imd_df.head())
+# print(imd_df.columns)
+# print(wards.head())
+# print(wards.columns)
+
+# Identify duplicates
+duplicated_names = wards["NAME"][wards["NAME"].duplicated(keep=False)]
+wards["NAME"] = wards.apply(
+    lambda row: f"{row['NAME']} ({row['CODE']})" if row["NAME"] in duplicated_names.values else row["NAME"],
+    axis=1
+)
+
+# print(wards["NAME"].unique())
 
 projected_crs = "EPSG:27700"
 lsoa = lsoa.to_crs(projected_crs)
@@ -33,8 +42,8 @@ wards = wards.to_crs(projected_crs)
 
 lsoa = lsoa.merge(imd_df, left_on='lsoa11cd', right_on='LSOA code (2011)', how='left')
 
-print(lsoa.head())
-print(lsoa.columns)
+# print(lsoa.head())
+# print(lsoa.columns)
 
 intersection = gpd.overlay(wards, lsoa, how='intersection')
 
@@ -68,4 +77,4 @@ print(wards_with_imd.head())
 print(wards_with_imd.columns)
 
 
-# wards_with_imd.to_file("IMD_mapping_result.shp") # saves the new shapefile
+wards_with_imd.to_file("IMD_mapping_result.shp") # saves the new shapefile
