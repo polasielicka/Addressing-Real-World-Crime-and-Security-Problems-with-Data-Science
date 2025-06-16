@@ -30,6 +30,18 @@ sarima_df = pd.read_csv(sarima_forecast_path)
 sarima_df['month'] = pd.to_datetime(sarima_df['month'])
 sarima_df['month_label'] = sarima_df['month'].dt.strftime('%B')
 
+# Load monthly police allocation
+alloc_path = os.path.join(script_dir, "..", "output", "monthly_allocation.csv")
+alloc_df   = pd.read_csv(alloc_path)
+alloc_df['ward'] = (
+    alloc_df['ward_name']
+    .str.lower()
+    .str.replace("&", "and")
+    .str.replace(" ward", "")
+    .str.strip()
+)
+alloc_df['month_label'] = alloc_df['month_num'].apply(lambda m: calendar.month_name[m])
+
 # Normalize names in GeoDataFrame
 gdf['NAME_clean'] = (
     gdf['NAME']
@@ -78,12 +90,32 @@ app.layout = html.Div([
      Input("month-selector", "value")]
 )
 def update_dashboard(clickData, selected_tab, selected_month_range):
-    gdf_copy = gdf.copy()
+
+    # gdf_copy = gdf.copy()
     start_idx, end_idx = selected_month_range
     selected_months = available_months[start_idx:end_idx + 1]
-    filtered_df = xgb_df[xgb_df['month_label'].isin(selected_months)]
-    map_data = filtered_df.groupby('ward')['predicted_burglaries'].sum().reset_index().rename(columns={'predicted_burglaries': 'total_forecast'})
-    gdf_copy = gdf_copy.merge(map_data, how='left', left_on='NAME_clean', right_on='ward')
+    # filter XGB & merge allocation
+    filtered_df = xgb_df[xgb_df['month_label'].isin(selected_months)].copy()
+    filtered_df = filtered_df.merge(
+        alloc_df[['ward','month_num','tier','officers_per_shift']],
+        on=['ward','month_num'],
+        how='left'
+    )
+
+    # prepare map data
+    map_data = (
+        filtered_df
+        .groupby('ward')['predicted_burglaries']
+        .sum()
+        .reset_index()
+        .rename(columns={'predicted_burglaries': 'total_forecast'})
+    )
+    gdf_copy = gdf.merge(
+        map_data,
+        left_on='NAME_clean',
+        right_on='ward',
+        how='left'
+    )
 
     text = ""
     fig_bar = px.bar(title="Select a tab to display relevant chart")
@@ -91,17 +123,26 @@ def update_dashboard(clickData, selected_tab, selected_month_range):
     if selected_tab == 'ward' and clickData:
         idx = clickData["points"][0]["location"]
         ward = gdf.iloc[idx]
-        ward_name = ward['NAME']
+        ward_name       = ward['NAME']
         ward_name_clean = ward['NAME_clean']
         pred_row = filtered_df[filtered_df['ward'] == ward_name_clean]
+
         if not pred_row.empty:
-            monthly_sum = pred_row.groupby('month_label')['predicted_burglaries'].sum().reset_index()
+            pred_row = pred_row.sort_values('month_num')
             fig_bar = px.bar(
-                monthly_sum,
+                pred_row,
                 x="month_label",
                 y="predicted_burglaries",
                 title=f"Monthly Predictions for {ward_name}",
-                labels={"month_label": "Month", "predicted_burglaries": "Predicted Burglaries"}
+                labels={
+                    "month_label": "Month",
+                    "predicted_burglaries": "Predicted Burglaries"
+                },
+                hover_data={
+                    "tier": True,
+                    "officers_per_shift": True,
+                    "predicted_burglaries": True
+                }
             )
             text = f"Clicked Ward: {ward_name}"
 
@@ -138,7 +179,7 @@ def update_dashboard(clickData, selected_tab, selected_month_range):
         center={"lat": 51.5074, "lon": -0.1278},
         opacity=0.6,
         hover_name="NAME",
-        hover_data={"HECTARES": True, "IMDRank": True, "IMDDecil": True, "Index of M": True, "total_forecast": False}
+        hover_data={"HECTARES": True, "IMDRank": True, "IMDDecil": True, "Index of M": True}
     )
     fig_map.update_layout(margin={"r":0,"t":0,"l":0,"b":0})
 
