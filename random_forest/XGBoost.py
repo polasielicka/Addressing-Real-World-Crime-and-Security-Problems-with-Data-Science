@@ -82,7 +82,7 @@ def load_data():
 
     return df_final
 
-def prepare_train_test_split(df):
+def prepare_train_test_split(df, lag_range):
     df = df.copy()
 
     # extract year and month_num
@@ -175,15 +175,22 @@ def prepare_train_test_split(df):
     final_df = pd.concat(full_data)
     final_df = final_df.sort_values(by=['ward_name', 'year', 'month_num'])
 
-    for lag in [1, 2, 3]:
+    for lag in range(1, lag_range+1):
         final_df[f'lag{lag}'] = (
             final_df
             .groupby('ward_name')['burglaries']
             .shift(lag)
         )
 
+    # add lag_12 NO MATTER LAG RANGE
+    final_df['lag12'] = (
+        final_df
+        .groupby('ward_name')['burglaries']
+        .shift(12)
+    )
+
     # drop NANs created by lags
-    final_df = final_df.dropna(subset=[f'lag{lag}' for lag in [1, 2, 3]])
+    final_df = final_df.dropna(subset=[f'lag{lag}' for lag in range(1, lag_range+1)])
 
     return final_df
 
@@ -295,13 +302,13 @@ def evaluate_model(model, y_pred, y_test, X_test, forecast_year):
 def main():
     # initialize some variables
     forecast_year = 2024
-    lag_size = 12
+    lag_size = 3
     assert lag_size <= 12 and lag_size >= 1, "lag_range must be between 1 and 12"
 
     # load the data
     print("Loading data...")
     data = load_data()
-    data = prepare_train_test_split(data)
+    data = prepare_train_test_split(data, lag_size)
     print(f"Data loaded with {data.shape[0]} rows and {data.shape[1]} columns.")
 
     # save the cleaned data to a csv file
@@ -311,8 +318,8 @@ def main():
 
     # train random forest model (uncomment to chose model)
     print("Training XGBoost model...")
-    #df_results, model, X_test = train_XGBoost(data, forecast_year, lag_range=range(1, lag_size + 1))
-    df_results, model, X_test = recursive_forecast(data, forecast_years=[forecast_year], lag_range=range(1, lag_size + 1))
+    df_results, model, X_test = train_XGBoost(data, forecast_year, lag_range=range(1, lag_size + 1))
+    #df_results, model, X_test = recursive_forecast(data, forecast_years=[forecast_year], lag_range=range(1, lag_size + 1))
     #df_results, model, X_test = hybrid_forecast(data, forecast_year, lag_range=range(1, lag_size + 1))
     print(f"Results saved with {df_results.shape[0]} rows and {df_results.shape[1]} columns.")
 

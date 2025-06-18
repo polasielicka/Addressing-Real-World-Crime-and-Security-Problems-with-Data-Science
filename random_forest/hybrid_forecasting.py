@@ -34,7 +34,9 @@ def hybrid_forecast(data, forecast_year, lag_range):
     train_df = df[df["year"] < forecast_year]
     test_df = df[df["year"] == forecast_year]
 
-    train_df = train_df.dropna(subset=['lag1', 'lag2', 'lag3'])
+    # Drop rows in train_df where any lag in lag_range or lag12 is NaN
+    lag_cols = [f'lag{lag}' for lag in lag_range] + ['lag12']
+    train_df = train_df.dropna(subset=lag_cols)
 
     # Aggregate both + add covid flag
     train_agg = train_df.groupby(["ward_name", "year", "month_num"], as_index=False)["burglaries"].mean()
@@ -57,6 +59,12 @@ def hybrid_forecast(data, forecast_year, lag_range):
             .shift(lag)
         )
     train_agg = train_agg.dropna(subset=[f'lag{lag}' for lag in lag_range])
+    # add lag12 to training set
+    train_agg['lag12'] = (
+        train_agg
+        .groupby('ward_name')['burglaries']
+        .shift(12)
+    )
 
     # Add historic data from train_agg 2023 to df_recursive
     historic_2023 = train_agg[["ward_name", "year", "month_num", "burglaries"]].copy()
@@ -71,8 +79,13 @@ def hybrid_forecast(data, forecast_year, lag_range):
             .groupby('ward_name')['recursive_pred']
             .shift(lag)
         )
+    df_recursive['lag12'] = (
+        df_recursive
+        .groupby('ward_name')['recursive_pred']
+        .shift(12)
+    )
     test_agg = test_agg.merge(
-        df_recursive[["ward_name", "year", "month_num"] + [f"lag{lag}" for lag in lag_range]],
+        df_recursive[["ward_name", "year", "month_num"] + [f"lag{lag}" for lag in lag_range] + ["lag12"]],
         on=["ward_name", "year", "month_num"],
         how="left"
     )
@@ -83,7 +96,7 @@ def hybrid_forecast(data, forecast_year, lag_range):
     print(f"Test columns: {test_agg.columns.tolist()}")
 
     # Prepare features and target
-    feature_cols = imd_features + ["month_num", "covid_flag"] + [f"lag{lag}" for lag in lag_range]
+    feature_cols = imd_features + ["month_num", "covid_flag"] + [f"lag{lag}" for lag in lag_range] + ["lag12"]
     X_train = train_agg[feature_cols]
     y_train = train_agg["burglaries"]
     X_test = test_agg[feature_cols]

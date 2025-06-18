@@ -13,6 +13,9 @@ def add_lags(df, lag_range):  # lag_1 to lag_12
     df = df.sort_values(["ward_name", "year", "month_num"])
     for lag in lag_range:
         df[f"lag_{lag}"] = df.groupby("ward_name")["burglaries"].shift(lag)
+
+    # add lag 12 no matter what
+    df["lag_12"] = df.groupby("ward_name")["burglaries"].shift(12)
     return df
 
 def add_covid_flag(df):
@@ -31,7 +34,7 @@ def recursive_forecast(df, forecast_years, lag_range):
         "imd_score", "income_score", "employment_domain_score",
         "education_domain_score", "health_domain_score", "crime_domain_score",
         "housing_domain_score", "environment_domain_score",
-        "covid_flag", "month_num"
+        "covid_flag", "month_num", "lag_12"
     ] + [f"lag_{i}" for i in lag_range]
 
     # collect true and predicted values to evaluate later
@@ -42,7 +45,9 @@ def recursive_forecast(df, forecast_years, lag_range):
         train_df = df[df["year"] < year].copy()
         test_df = df[df["year"] == year].copy()
 
-        train_df = train_df.dropna(subset=["lag_1", "lag_2", "lag_3"])
+        # Drop rows with missing values in all lags in lag_range and lag_12
+        lag_cols = [f"lag_{i}" for i in lag_range] + ["lag_12"]
+        train_df = train_df.dropna(subset=lag_cols)
 
         X_train = train_df[features]
         y_train = train_df["burglaries"]
