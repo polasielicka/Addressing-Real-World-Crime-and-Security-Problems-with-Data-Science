@@ -10,7 +10,7 @@ def load_data():
     print("Reading data from coordinate mapping...")
     all_data = coordinate_mapping()
 
-    # save all data to an excel file in output folder
+    # save all data to an csv file in output folder
     output_dir = os.path.join(repo_root, 'output')
     os.makedirs(output_dir, exist_ok=True)
     output_path = os.path.join(output_dir, 'input_data.csv')

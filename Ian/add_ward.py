@@ -37,6 +37,15 @@ def coordinate_mapping():
     # Load ward shapefile
     wards = gpd.read_file(shapefile_path)
 
+    # Identify duplicates
+    duplicated_names = wards["NAME"][wards["NAME"].duplicated(keep=False)]
+    wards["NAME"] = wards.apply(
+        lambda row: f"{row['NAME']} ({row['CODE']})" if row["NAME"] in duplicated_names.values else row["NAME"],
+        axis=1
+    )
+
+    print(wards["NAME"].unique())
+
     # Match CRS if needed
     if wards.crs != gdf_points.crs:
         wards = wards.to_crs(gdf_points.crs)
@@ -52,7 +61,7 @@ def coordinate_mapping():
 
     return df_with_wards
 
-
+ward = coordinate_mapping()
 
 # pd.set_option('display.max_rows', None)      # Show all rows
 # pd.set_option('display.max_columns', None)   # Show all columns

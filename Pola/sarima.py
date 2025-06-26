@@ -9,14 +9,16 @@ FUTURE_PERIODS = 12  # months to forecast
 SEASONAL_PERIOD = 12
 
 def load_burglary_counts(data_dir: str) -> pd.Series:
-    pattern = os.path.join(data_dir, "*", "*", "*-street.csv")
-    files = glob.glob(pattern)
-    if not files:
-        raise FileNotFoundError(f"No street CSVs found using pattern: {pattern}")
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    output_dir = os.path.abspath(os.path.join(script_dir, '..', 'output'))
 
-    df = pd.concat((pd.read_csv(f) for f in files), ignore_index=True)
+    # read input burglary data from csv
+    all_data_path = os.path.join(output_dir, 'input_data.csv')
+    if not os.path.exists(all_data_path):
+        raise FileNotFoundError(f"'input_data.csv' not found at {all_data_path}. Please ensure the file exists.")
+    df = pd.read_csv(all_data_path) # potentially clunky
+
     df["Month"] = pd.to_datetime(df["Month"], format="%Y-%m")
-    df = df[df["Crime type"].str.strip().str.lower() == "burglary"]
 
     monthly = (
         df.set_index("Month")

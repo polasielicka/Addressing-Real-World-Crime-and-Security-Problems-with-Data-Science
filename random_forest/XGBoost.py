@@ -28,7 +28,7 @@ def load_data():
     all_data = pd.read_csv(all_data_path) # potentially clunky
 
     # initial cleaning step
-    burglary_data = all_data[all_data['Crime type'].str.lower() == 'burglary'].copy() # select burglaries only
+    burglary_data = all_data.copy()
     burglary_data["Month"] = pd.to_datetime(burglary_data["Month"]) # proper datetime format
     burglary_data = burglary_data[burglary_data['Month'].dt.year <= 2024] # drop data beyond 2024
 
@@ -57,7 +57,7 @@ def load_data():
     df_final = df_merged[df_merged['ward_name'].notna()]
     print(f"Rows without a ward mapping: {missing}")
 
-    # drop unnecessary columns
+    # # drop unnecessary columns
     cols_to_drop = [
         "AREA_CODE", "DESCRIPTIO", "FILE_NAME", "NUMBER", "NUMBER0", "POLYGON_ID",
         "UNIT_ID", "CODE", "HECTARES", "AREA", "TYPE_CODE", "DESCRIPT0",
@@ -138,7 +138,7 @@ def prepare_train_test_split(df, lag_range):
     # rename columns for clarity
     df_imd = df_imd.rename(columns={"NAME": "ward_name"})
     duplicates = df_imd[df_imd.duplicated('ward_name', keep=False)]
-    #print(duplicates['ward_name'].unique())
+    # print(duplicates['ward_name'].nunique())
 
     # new dataset
     full_data = []

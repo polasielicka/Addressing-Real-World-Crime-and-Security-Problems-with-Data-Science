@@ -8,12 +8,12 @@ import os
 import calendar
 
 script_dir = os.path.dirname(os.path.abspath(__file__))
-shapefile_path = os.path.join(script_dir, "..", "..", "..", "datasets", "coordinate_mapping_2025", "IMD_mapping_result.shp")
+shapefile_path = os.path.join(script_dir, "..", "data", "coordinate_mapping_2025", "IMD_mapping_result.shp")
 gdf = gpd.read_file(shapefile_path)
 gdf = gdf.to_crs(epsg=4326)
 
 # Load XGBoost predictions
-xgb_path = os.path.join(script_dir, "..", "output", "results.csv")
+xgb_path = os.path.join(script_dir, "..", "random_forest", "output", "results.csv")
 xgb_df = pd.read_csv(xgb_path)
 xgb_df['ward'] = (
     xgb_df['ward_name']
@@ -31,7 +31,7 @@ sarima_df['month'] = pd.to_datetime(sarima_df['month'])
 sarima_df['month_label'] = sarima_df['month'].dt.strftime('%B')
 
 # Load monthly police allocation
-alloc_path = os.path.join(script_dir, "..", "output", "monthly_allocation.csv")
+alloc_path = os.path.join(script_dir, "..", "random_forest", "output", "monthly_allocation.csv")
 alloc_df   = pd.read_csv(alloc_path)
 alloc_df['ward'] = (
     alloc_df['ward_name']
